@@ -96,20 +96,15 @@ td{padding:7px 10px}
 <script>
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  PASTE YOUR FIREBASE CONFIG HERE                            ║
-// ╚══════════════════════════════════════════════════════════════╝var firebaseConfig = {
-  apiKey: "AIzaSyCgGct_H34Sp8cJr4XamCzOLvvvCWL6Sn0",
-  authDomain: "duobudget-a480f.firebaseapp.com",
-  projectId: "duobudget-a480f",
-  storageBucket: "duobudget-a480f.firebasestorage.app",
-  messagingSenderId: "686450058537",
-  appId: "1:686450058537:web:dca95ea7f52a7442228338"
-};
-
+// ╚══════════════════════════════════════════════════════════════╝
+var firebaseConfig={apiKey:"AIzaSyCgGct_H34Sp8cJr4XamCzOLvvvCWL6Sn0",authDomain:"duobudget-a480f.firebaseapp.com",projectId:"duobudget-a480f",storageBucket:"duobudget-a480f.firebasestorage.app",messagingSenderId:"686450058537",appId:"1:686450058537:web:dca95ea7f52a7442228338"};
+firebase.initializeApp(firebaseConfig);var db=firebase.firestore();var auth=firebase.auth();
+var LISTENERS={};
 
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  ALLOWED EMAILS — only these accounts can access the app    ║
 // ╚══════════════════════════════════════════════════════════════╝
-var ALLOWED_EMAILS=["ivana.utomo@gmail.com","97adin@gmail.com"]; // ← Replace with your real Gmail addresses
+var ALLOWED_EMAILS=["ivana.utomo@gmail.com","97adin@gmail.com"];
 
 function docRef(k){return db.collection("duobudget").doc(k);}
 function loadDoc(k,fb){return docRef(k).get().then(function(s){return s.exists?s.data().value:fb;}).catch(function(){return fb;});}
