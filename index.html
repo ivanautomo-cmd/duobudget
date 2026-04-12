@@ -58,6 +58,11 @@ input,select,button{font-family:inherit;outline:none}
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px 32px;text-align:center;max-width:340px;width:100%}
 .login-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:13px;font-weight:600}
+.google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:14px;font-weight:600;transition:background 0.15s,box-shadow 0.15s}
+.google-btn:hover{background:#f8f7f5;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+.google-btn svg{flex-shrink:0}
+.auth-error{background:#fef2f2;border:1px solid #fecaca;color:var(--red);padding:10px 14px;border-radius:8px;font-size:12px;margin-top:12px;text-align:center}
+.auth-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;font-size:13px;color:var(--dim)}
 table{width:100%;border-collapse:collapse;font-size:11px}
 th{padding:8px 10px;font-size:11px;font-weight:600;color:var(--dim);text-align:left;letter-spacing:0.3px}
 td{padding:7px 10px}
@@ -76,18 +81,22 @@ td{padding:7px 10px}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .pie-wrap{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
 .pie-legend{display:flex;flex-direction:column;gap:4px}
+.rec-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0eeeb}
+.rec-item:last-child{border-bottom:none}
+.rec-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:600;letter-spacing:0.3px}
+.rec-active{background:#dcfce7;color:#16a34a}
+.rec-paused{background:#fef3c7;color:#d97706}
 </style>
 </head>
 <body>
 <div id="app"><div class="loading-screen">Loading DuoBudget...</div></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  PASTE YOUR FIREBASE CONFIG HERE                            ║
-// ╚══════════════════════════════════════════════════════════════╝
-
-var firebaseConfig = {
+// ╚══════════════════════════════════════════════════════════════╝var firebaseConfig = {
   apiKey: "AIzaSyCgGct_H34Sp8cJr4XamCzOLvvvCWL6Sn0",
   authDomain: "duobudget-a480f.firebaseapp.com",
   projectId: "duobudget-a480f",
@@ -97,17 +106,17 @@ var firebaseConfig = {
 };
 
 
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  ALLOWED EMAILS — only these accounts can access the app    ║
+// ╚══════════════════════════════════════════════════════════════╝
+var ALLOWED_EMAILS=["ivana.utomo@gmail.com","97adin@gmail.com"]; // ← Replace with your real Gmail addresses
 
-firebase.initializeApp(firebaseConfig);var db=firebase.firestore();
-
-
-var LISTENERS={};
 function docRef(k){return db.collection("duobudget").doc(k);}
 function loadDoc(k,fb){return docRef(k).get().then(function(s){return s.exists?s.data().value:fb;}).catch(function(){return fb;});}
 function saveDoc(k,v){return docRef(k).set({value:v,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}
 function listenDoc(k,cb){if(LISTENERS[k])LISTENERS[k]();LISTENERS[k]=docRef(k).onSnapshot(function(s){if(s.exists)cb(s.data().value);});}
 
-var state={user:null,expenses:[],settlements:[],recurrings:[],cats:[],budgets:{},wealth:{},wAccounts:{},wTargets:{},tab:"add",month:getMonthKey(new Date()),loading:true};
+var state={user:null,authUser:null,authLoading:true,authError:"",expenses:[],settlements:[],recurrings:[],cats:[],budgets:{},wealth:{},wAccounts:{},wTargets:{},tab:"add",month:getMonthKey(new Date()),loading:true};
 var USERS=["Ivana","Adi"],MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var GROUPS=[{id:"fix",label:"Fixed Costs"},{id:"variable",label:"Variable"},{id:"asset",label:"Assets"},{id:"saving",label:"Savings"}];
 var ACCOLORS=["#1e3a5f","#f59e0b","#10b981","#8b5cf6","#ec4899","#06b6d4","#ef4444","#84cc16"];
@@ -162,7 +171,104 @@ function getMonthTotalSpend(user,mk){
   var t=0;state.expenses.forEach(function(e){if(getMonthKey(new Date(e.date))!==mk||e.entryType==="income")return;if(e.type==="personal"&&e.addedBy!==user)return;t+=e.type==="personal"?e.amount:e.myShare;});return t;
 }
 
-// ── SVG Pie Chart helper ──────────────────────────────────────
+// ── SVG Area Chart helper (stacked, multi-series, like screenshot) ──
+function svgAreaChart(chartData, accounts, filter) {
+  var W=500, H=160, padL=8, padR=8, padT=18, padB=22;
+  var innerW=W-padL-padR, innerH=H-padT-padB;
+  var n=chartData.length;
+  if(n<2) return '';
+
+  // Determine series: if filter=all and multiple accounts, stacked; else single
+  var isSingle=(filter!=="all"||accounts.length===1);
+  var seriesColors=["#1e3a5f","#7c3aed","#16a34a","#0d9488","#f59e0b","#ec4899"];
+  var AREA_ALPHA=["0.75","0.55","0.40","0.30","0.22","0.16"];
+
+  // Build data values
+  var maxVal=1;
+  chartData.forEach(function(d){
+    var v=filter==="all"?d.total:(d[filter]||0);
+    if(v>maxVal)maxVal=v;
+  });
+
+  function xPos(i){return padL+innerW*(i/(n-1));}
+  function yPos(v){return padT+innerH*(1-v/maxVal);}
+
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;overflow:visible">';
+
+  // Grid lines (3 horizontal)
+  for(var g=0;g<=2;g++){
+    var gy=padT+innerH*(g/2);
+    var gval=maxVal*(1-g/2);
+    svg+='<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="#e8e5e0" stroke-width="1"/>';
+    svg+='<text x="'+(W-padR+2)+'" y="'+(gy+3).toFixed(1)+'" font-size="8" fill="#bbb" text-anchor="start">'+Math.round(gval/1000)+'k</text>';
+  }
+
+  if(isSingle){
+    // Single area: filled with gradient
+    var seriesId=filter==="all"?null:filter;
+    var color=seriesId?ACCOLORS[accounts.findIndex(function(a){return a.id===seriesId;})%ACCOLORS.length]:"#1e3a5f";
+    var gradId="ag0";
+    svg+='<defs><linearGradient id="'+gradId+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.5"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0.05"/></linearGradient></defs>';
+    var pts=chartData.map(function(d,i){return xPos(i).toFixed(1)+','+yPos(filter==="all"?d.total:(d[filter]||0)).toFixed(1);}).join(' ');
+    var fillPts=xPos(0).toFixed(1)+','+(padT+innerH)+' '+pts+' '+xPos(n-1).toFixed(1)+','+(padT+innerH);
+    svg+='<polygon points="'+fillPts+'" fill="url(#'+gradId+')" />';
+    svg+='<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    // Dots at each data point
+    chartData.forEach(function(d,i){
+      var v=filter==="all"?d.total:(d[filter]||0);
+      svg+='<circle cx="'+xPos(i).toFixed(1)+'" cy="'+yPos(v).toFixed(1)+'" r="3" fill="'+color+'" stroke="white" stroke-width="1.5"/>';
+    });
+  } else {
+    // Stacked area chart for "all combined"
+    // Build stacked values per data point
+    var stacked=chartData.map(function(d){
+      var cum=0,layers=[];
+      accounts.forEach(function(a,idx){
+        var v=d[a.id]||0;
+        layers.push({bot:cum,top:cum+v,color:seriesColors[idx%seriesColors.length],alpha:AREA_ALPHA[idx%AREA_ALPHA.length]});
+        cum+=v;
+      });
+      return layers;
+    });
+    // Draw from bottom layer to top (reverse for visual stacking)
+    for(var ai=accounts.length-1;ai>=0;ai--){
+      var color2=seriesColors[ai%seriesColors.length];
+      var gradId2="ag"+ai;
+      svg+='<defs><linearGradient id="'+gradId2+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color2+'" stop-opacity="0.7"/><stop offset="100%" stop-color="'+color2+'" stop-opacity="0.1"/></linearGradient></defs>';
+      var topPts=chartData.map(function(d,i){return xPos(i).toFixed(1)+','+yPos(stacked[i][ai].top).toFixed(1);}).join(' ');
+      var botPts=chartData.map(function(d,i){return xPos(n-1-i).toFixed(1)+','+yPos(stacked[n-1-i][ai].bot).toFixed(1);}).join(' ');
+      svg+='<polygon points="'+topPts+' '+botPts+'" fill="url(#'+gradId2+')" />';
+      svg+='<polyline points="'+topPts+'" fill="none" stroke="'+color2+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    // Dots on total line
+    chartData.forEach(function(d,i){
+      svg+='<circle cx="'+xPos(i).toFixed(1)+'" cy="'+yPos(d.total).toFixed(1)+'" r="3" fill="#1e3a5f" stroke="white" stroke-width="1.5"/>';
+    });
+  }
+
+  // X-axis labels
+  chartData.forEach(function(d,i){
+    // Show every label if <=8 points, else alternate
+    if(n<=8||i%Math.ceil(n/8)===0||i===n-1){
+      svg+='<text x="'+xPos(i).toFixed(1)+'" y="'+(H-3)+'" font-size="9" fill="#999" text-anchor="middle">'+d.label+'</text>';
+    }
+  });
+
+  svg+='</svg>';
+
+  // Legend for stacked view
+  var legend='';
+  if(!isSingle&&accounts.length>1){
+    legend='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">';
+    accounts.forEach(function(a,idx){
+      legend+='<div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="width:10px;height:10px;border-radius:2px;background:'+seriesColors[idx%seriesColors.length]+';display:inline-block"></span>'+a.icon+' '+a.label+'</div>';
+    });
+    legend+='</div>';
+  }
+
+  return svg+legend;
+}
+
 function svgPie(slices, size) {
   var r=size/2, cx=r, cy=r;
   var total=0; slices.forEach(function(s){total+=s.value;});
@@ -195,21 +301,70 @@ function svgPie(slices, size) {
 // ══════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// GOOGLE AUTH
+// ══════════════════════════════════════════════════════════════
+function googleSignIn(){
+  state.authError="";render();
+  var provider=new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(e){
+    console.error(e);
+    state.authError=e.message||"Sign-in failed";render();
+  });
+}
+function googleSignOut(){
+  auth.signOut().then(function(){state.user=null;state.authUser=null;render();});
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
 async function initApp(){
+  // Listen to auth state
+  auth.onAuthStateChanged(async function(firebaseUser){
+    if(firebaseUser){
+      var email=firebaseUser.email.toLowerCase();
+      if(ALLOWED_EMAILS.map(function(e){return e.toLowerCase();}).indexOf(email)===-1){
+        state.authUser=null;state.authLoading=false;state.authError="Access denied. "+email+" is not authorized.";
+        auth.signOut();render();return;
+      }
+      state.authUser={email:email,name:firebaseUser.displayName||email,photo:firebaseUser.photoURL};
+      state.authError="";state.authLoading=false;
+      render();
+      // Start loading data in the background
+      loadData();
+    } else {
+      state.authUser=null;state.authLoading=false;state.loading=true;state.user=null;
+      render();
+    }
+  });
+}
+
+async function loadData(){
   try{var r=await Promise.all([loadDoc("expenses",[]),loadDoc("settlements",[]),loadDoc("recurrings",[]),loadDoc("cats",DEFAULT_CATS),loadDoc("bud-Ivana",DEFAULT_BUDGET),loadDoc("bud-Adi",DEFAULT_BUDGET),loadDoc("wlth-Ivana",[]),loadDoc("wlth-Adi",[]),loadDoc("wacc-Ivana",DEFAULT_WACC),loadDoc("wacc-Adi",DEFAULT_WACC),loadDoc("wtgt-Ivana",{yearEnd:50000,year:2026}),loadDoc("wtgt-Adi",{yearEnd:50000,year:2026})]);
   state.expenses=r[0]||[];state.settlements=r[1]||[];state.recurrings=r[2]||[];state.cats=r[3]||DEFAULT_CATS;state.budgets={Ivana:r[4]||DEFAULT_BUDGET,Adi:r[5]||DEFAULT_BUDGET};state.wealth={Ivana:r[6]||[],Adi:r[7]||[]};state.wAccounts={Ivana:r[8]||DEFAULT_WACC,Adi:r[9]||DEFAULT_WACC};state.wTargets={Ivana:r[10]||{yearEnd:50000,year:2026},Adi:r[11]||{yearEnd:50000,year:2026}};state.loading=false;
-  listenDoc("expenses",function(v){state.expenses=v||[];_cumCache={};render();});listenDoc("settlements",function(v){state.settlements=v||[];render();});listenDoc("cats",function(v){state.cats=v||DEFAULT_CATS;render();});
+  listenDoc("expenses",function(v){state.expenses=v||[];_cumCache={};render();});listenDoc("settlements",function(v){state.settlements=v||[];render();});listenDoc("cats",function(v){state.cats=v||DEFAULT_CATS;render();});listenDoc("recurrings",function(v){state.recurrings=v||[];render();});
   USERS.forEach(function(u){listenDoc("bud-"+u,function(v){state.budgets[u]=v||DEFAULT_BUDGET;_cumCache={};render();});listenDoc("wlth-"+u,function(v){state.wealth[u]=v||[];render();});listenDoc("wacc-"+u,function(v){state.wAccounts[u]=v||DEFAULT_WACC;render();});listenDoc("wtgt-"+u,function(v){state.wTargets[u]=v||{yearEnd:50000,year:2026};render();});});
   render();}catch(e){console.error(e);document.getElementById("app").innerHTML='<div class="loading-screen">Error connecting to Firebase.</div>';}}
 
-function render(){var app=document.getElementById("app");if(state.loading){app.innerHTML='<div class="loading-screen">Loading...</div>';return;}if(!state.user){app.innerHTML=renderLogin();return;}app.innerHTML=renderShell();}
-function renderLogin(){return'<div class="login-wrap"><div class="login-card"><div style="font-size:40px;margin-bottom:8px">\u{1F4B6}</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">DuoBudget</h1><p style="font-size:13px;color:#8a8a8a;margin-bottom:24px">Budget \u00B7 Split \u00B7 Dashboard \u00B7 Wealth</p><div style="display:flex;gap:12px">'+USERS.map(function(u){return'<button class="login-btn" onclick="loginAs(\''+u+'\')"><span class="av">'+u.charAt(0)+'</span><span>'+u+'</span></button>';}).join("")+'</div></div></div>';}
-function renderShell(){var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);var bt=balance===0?"Settled up with "+other+" \u2713":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));var tabs=[{id:"add",label:"+ Add"},{id:"budget",label:"Budget"},{id:"dashboard",label:"Dashboard"},{id:"split",label:"Split"},{id:"wealth",label:"Wealth"},{id:"settings",label:"\u2699"}];return'<div class="shell"><header class="hdr"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">\u{1F4B6}</span><span style="font-weight:800;font-size:16px">DuoBudget</span></div><button class="badge" onclick="logout()"><span class="av av-sm">'+u.charAt(0)+'</span><span>'+u+'</span></button></header><div class="bal">'+bt+'</div><nav class="tabs">'+tabs.map(function(t){return'<button class="tab'+(state.tab===t.id?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>';}).join("")+'</nav><main class="main" id="tab-content"></main></div>';}
+function render(){var app=document.getElementById("app");if(state.authLoading){app.innerHTML='<div class="loading-screen">Loading...</div>';return;}if(!state.authUser){app.innerHTML=renderAuthLogin();return;}if(state.loading){app.innerHTML='<div class="loading-screen">Loading data...</div>';return;}if(!state.user){app.innerHTML=renderLogin();return;}app.innerHTML=renderShell();}
+
+function renderAuthLogin(){
+  var h='<div class="login-wrap"><div class="login-card"><div style="font-size:40px;margin-bottom:8px">\u{1F4B6}</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">DuoBudget</h1><p style="font-size:13px;color:#8a8a8a;margin-bottom:24px">Budget \u00B7 Split \u00B7 Dashboard \u00B7 Wealth</p>';
+  h+='<button class="google-btn" onclick="googleSignIn()"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Sign in with Google</button>';
+  if(state.authError) h+='<div class="auth-error">'+state.authError+'</div>';
+  h+='<p style="font-size:10px;color:#bbb;margin-top:16px">Access restricted to authorized accounts only</p></div></div>';
+  return h;
+}
+
+function renderLogin(){return'<div class="login-wrap"><div class="login-card"><div style="font-size:40px;margin-bottom:8px">\u{1F4B6}</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">DuoBudget</h1><p style="font-size:13px;color:#8a8a8a;margin-bottom:4px">Signed in as '+state.authUser.email+'</p><p style="font-size:13px;color:#8a8a8a;margin-bottom:24px">Who\u2019s using the app?</p><div style="display:flex;gap:12px">'+USERS.map(function(u){return'<button class="login-btn" onclick="loginAs(\''+u+'\')"><span class="av">'+u.charAt(0)+'</span><span>'+u+'</span></button>';}).join("")+'</div><button style="margin-top:16px;background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;text-decoration:underline" onclick="googleSignOut()">Sign out</button></div></div>';}
+function renderShell(){var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);var bt=balance===0?"Settled up with "+other+" \u2713":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));var tabs=[{id:"add",label:"+ Add"},{id:"budget",label:"Budget"},{id:"dashboard",label:"Dashboard"},{id:"split",label:"Split"},{id:"recurring",label:"\u{1F504} Recurring"},{id:"wealth",label:"Wealth"},{id:"settings",label:"\u2699"}];return'<div class="shell"><header class="hdr"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">\u{1F4B6}</span><span style="font-weight:800;font-size:16px">DuoBudget</span></div><div style="display:flex;gap:6px;align-items:center"><button class="badge" onclick="logout()"><span class="av av-sm">'+u.charAt(0)+'</span><span>'+u+'</span></button><button style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--dim)" onclick="googleSignOut()" title="Sign out Google">\u{1F6AA}</button></div></header><div class="bal">'+bt+'</div><nav class="tabs">'+tabs.map(function(t){return'<button class="tab'+(state.tab===t.id?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>';}).join("")+'</nav><main class="main" id="tab-content"></main></div>';}
 function calcBalance(u){var b=0;state.expenses.forEach(function(e){if(e.type!=="shared")return;if(e.paidBy===u)b+=(e.amount-e.myShare);else b-=e.myShare;});state.settlements.forEach(function(s){if(s.from===u)b+=s.amount;else if(s.to===u)b-=s.amount;});return b;}
-function loginAs(u){state.user=u;state.tab="add";render();renderTabContent();}
+function loginAs(u){state.user=u;state.tab="add";render();if(!state.loading)renderTabContent();}
 function logout(){state.user=null;render();}
+function logoutFull(){googleSignOut();}
 function switchTab(t){state.tab=t;render();renderTabContent();}
-function renderTabContent(){var el=document.getElementById("tab-content");if(!el)return;var c="";if(state.tab==="add")c=renderAddTab();else if(state.tab==="budget")c=renderBudgetTab();else if(state.tab==="dashboard")c=renderDashboardTab();else if(state.tab==="split")c=renderSplitTab();else if(state.tab==="wealth")c=renderWealthTab();else if(state.tab==="settings")c=renderSettingsTab();el.innerHTML=c;}
+function renderTabContent(){var el=document.getElementById("tab-content");if(!el)return;var c="";if(state.tab==="add")c=renderAddTab();else if(state.tab==="budget")c=renderBudgetTab();else if(state.tab==="dashboard")c=renderDashboardTab();else if(state.tab==="split")c=renderSplitTab();else if(state.tab==="recurring")c=renderRecurringTab();else if(state.tab==="wealth")c=renderWealthTab();else if(state.tab==="settings")c=renderSettingsTab();el.innerHTML=c;}
 
 // ══════════════════════════════════════════════════════════════
 // ADD TAB (unchanged from v7)
@@ -238,12 +393,29 @@ function renderAddTab(){
   h+='<button class="submit-btn" style="background:'+btnC+'" onclick="submitExpense()">'+(addState.mode==="income"?"Add Income":addState.mode==="recurring"?"Set Recurring":"Add Expense")+'</button></div>';return h;
 }
 function submitExpense(){
-  var amt=parseFloat(document.getElementById("add-amt").value);if(isNaN(amt)||amt<=0)return;var desc=document.getElementById("add-desc").value.trim(),date=document.getElementById("add-date").value,u=state.user,other=USERS.find(function(x){return x!==u;});
-  if(addState.mode==="income"){state.expenses.push({id:gid(),desc:desc||"Income",amount:amt,category:"income",type:"personal",paidBy:u,splitMode:"none",myShare:amt,date:date,addedBy:u,entryType:"income"});}
-  else{var myShare=amt;if(addState.type==="shared"){if(addState.split==="equal")myShare=amt/2;else{var ce=document.getElementById("add-custom");myShare=ce?parseFloat(ce.value)||0:amt/2;}}var label=desc||(state.cats.find(function(c){return c.id===addState.cat;})||{}).label||addState.cat;state.expenses.push({id:gid(),desc:label,amount:amt,category:addState.cat,type:addState.type,paidBy:addState.type==="shared"?addState.paidBy:u,splitMode:addState.split,myShare:myShare,date:date,addedBy:u});}
-  saveDoc("expenses",state.expenses);_cumCache={};addState.amt="";addState.desc="";addState.date=new Date().toISOString().slice(0,10);addState.custom="";addState.rend="";
+  var amt=parseFloat(document.getElementById("add-amt").value);if(isNaN(amt)||amt<=0)return;
+  var desc=document.getElementById("add-desc").value.trim(),date=document.getElementById("add-date").value,u=state.user,other=USERS.find(function(x){return x!==u;});
+  if(addState.mode==="recurring"){
+    // Save to recurrings list
+    var myShare=amt;if(addState.type==="shared"){if(addState.split==="equal")myShare=amt/2;else{var ce=document.getElementById("add-custom");myShare=ce?parseFloat(ce.value)||0:amt/2;}}
+    var label=desc||(state.cats.find(function(c){return c.id===addState.cat;})||{}).label||addState.cat;
+    var reEl=document.getElementById("add-rend");var rend=reEl?reEl.value:"";
+    var newRec={id:gid(),desc:label,amount:amt,category:addState.cat,type:addState.type,paidBy:addState.type==="shared"?addState.paidBy:u,splitMode:addState.split,myShare:myShare,startDate:date,endDate:rend||"",interval:addState.rInt,addedBy:u,paused:false,createdAt:new Date().toISOString()};
+    state.recurrings.push(newRec);
+    saveDoc("recurrings",state.recurrings);
+  } else if(addState.mode==="income"){
+    state.expenses.push({id:gid(),desc:desc||"Income",amount:amt,category:"income",type:"personal",paidBy:u,splitMode:"none",myShare:amt,date:date,addedBy:u,entryType:"income"});
+    saveDoc("expenses",state.expenses);_cumCache={};
+  } else {
+    var myShare2=amt;if(addState.type==="shared"){if(addState.split==="equal")myShare2=amt/2;else{var ce2=document.getElementById("add-custom");myShare2=ce2?parseFloat(ce2.value)||0:amt/2;}}
+    var label2=desc||(state.cats.find(function(c){return c.id===addState.cat;})||{}).label||addState.cat;
+    state.expenses.push({id:gid(),desc:label2,amount:amt,category:addState.cat,type:addState.type,paidBy:addState.type==="shared"?addState.paidBy:u,splitMode:addState.split,myShare:myShare2,date:date,addedBy:u});
+    saveDoc("expenses",state.expenses);_cumCache={};
+  }
+  addState.amt="";addState.desc="";addState.date=new Date().toISOString().slice(0,10);addState.custom="";addState.rend="";
   document.getElementById("add-amt").value="";document.getElementById("add-desc").value="";
-  var form=document.getElementById("add-form"),t=document.createElement("div");t.className="toast";t.textContent="Added! \u2713";form.prepend(t);setTimeout(function(){t.remove();},1800);
+  var toastMsg=addState.mode==="recurring"?"Recurring saved! \u{1F504}":"Added! \u2713";
+  var form=document.getElementById("add-form"),t=document.createElement("div");t.className="toast";t.textContent=toastMsg;form.prepend(t);setTimeout(function(){t.remove();},1800);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -329,6 +501,87 @@ function showSettleForm(){document.getElementById("settle-form").innerHTML='<div
 function doSettle(){var amt=parseFloat(document.getElementById("settle-amt").value);if(isNaN(amt)||amt<=0)return;state.settlements.push({id:gid(),from:state.user,to:USERS.find(function(x){return x!==state.user;}),amount:amt,date:document.getElementById("settle-date").value});saveDoc("settlements",state.settlements);renderTabContent();}
 
 // ══════════════════════════════════════════════════════════════
+// RECURRING TAB — View and manage all active recurring items
+// ══════════════════════════════════════════════════════════════
+function renderRecurringTab(){
+  var u=state.user,recs=state.recurrings||[];
+  var myRecs=recs.filter(function(r){return r.addedBy===u;});
+  var otherRecs=recs.filter(function(r){return r.addedBy!==u;});
+  var h='<h2 class="sec-title">Recurring items</h2><div style="font-size:12px;color:var(--dim);margin-bottom:16px">Manage your recurring expenses</div>';
+
+  if(myRecs.length===0&&otherRecs.length===0){
+    h+='<div class="empty">No recurring items yet.<br>Add one from the "+ Add" tab \u2192 Recurring.</div>';
+    return h;
+  }
+
+  // My recurring items
+  if(myRecs.length>0){
+    h+='<h3 class="sec-h">Your recurring ('+myRecs.length+')</h3><div class="card" style="padding:8px 14px">';
+    myRecs.forEach(function(r){
+      var c=state.cats.find(function(x){return x.id===r.category;});
+      var isPaused=r.paused||false;
+      var endStr=r.endDate?" \u00B7 ends "+r.endDate:"";
+      var typeStr=r.type==="shared"?" \u00B7 shared":"";
+      h+='<div class="rec-item"><div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0"><span style="font-size:20px">'+(c?c.icon:"\u{1F4E6}")+'</span><div style="min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.desc||(c?c.label:"Unknown"))+'</div><div style="font-size:10px;color:var(--dim)">'+fe(r.amount)+' \u00B7 '+r.interval+typeStr+endStr+'</div><div style="font-size:10px;color:var(--dim)">Since '+r.startDate+'</div></div></div>';
+      h+='<div style="display:flex;align-items:center;gap:6px"><span class="rec-badge '+(isPaused?"rec-paused":"rec-active")+'">'+(isPaused?"Paused":"Active")+'</span>';
+      h+='<button class="del-btn" style="font-size:10px;width:32px;height:24px;border-radius:6px" onclick="toggleRecurring(\''+r.id+'\')">'+(isPaused?"\u25B6":"\u23F8")+'</button>';
+      h+='<button class="del-btn" style="font-size:10px;width:32px;height:24px;border-radius:6px" onclick="editRecurring(\''+r.id+'\')">Edit</button>';
+      h+='<button class="del-btn" style="width:24px;height:24px" onclick="delRecurring(\''+r.id+'\')">\u00D7</button></div></div>';
+    });
+    h+='</div>';
+  }
+
+  // Other user's recurring items (read-only)
+  if(otherRecs.length>0){
+    var otherUser=USERS.find(function(x){return x!==u;});
+    h+='<h3 class="sec-h">'+otherUser+'\u2019s recurring ('+otherRecs.length+')</h3><div class="card" style="padding:8px 14px">';
+    otherRecs.forEach(function(r){
+      var c=state.cats.find(function(x){return x.id===r.category;});
+      var isPaused=r.paused||false;
+      h+='<div class="rec-item"><div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0"><span style="font-size:20px">'+(c?c.icon:"\u{1F4E6}")+'</span><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+(r.desc||(c?c.label:"Unknown"))+'</div><div style="font-size:10px;color:var(--dim)">'+fe(r.amount)+' \u00B7 '+r.interval+'</div></div></div><span class="rec-badge '+(isPaused?"rec-paused":"rec-active")+'">'+(isPaused?"Paused":"Active")+'</span></div>';
+    });
+    h+='</div>';
+  }
+
+  // Summary
+  var activeTotal=0;myRecs.filter(function(r){return!r.paused;}).forEach(function(r){
+    var amt=r.amount||0;
+    if(r.interval==="daily")amt*=30;else if(r.interval==="weekly")amt*=4.33;else if(r.interval==="yearly")amt/=12;
+    activeTotal+=amt;
+  });
+  h+='<div class="card" style="margin-top:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">Monthly recurring total (active only)</div><div style="font-size:20px;font-weight:700;font-family:var(--fm);color:var(--accent)">'+fe(activeTotal)+'</div><div style="font-size:10px;color:var(--dim);margin-top:2px">Estimated based on your active recurring items</div></div>';
+  return h;
+}
+
+function toggleRecurring(id){
+  var recs=state.recurrings||[];
+  var r=recs.find(function(x){return x.id===id;});
+  if(r)r.paused=!r.paused;
+  saveDoc("recurrings",recs);renderTabContent();
+}
+function editRecurring(id){
+  var recs=state.recurrings||[];
+  var r=recs.find(function(x){return x.id===id;});
+  if(!r)return;
+  var newAmt=prompt("Amount (EUR):",r.amount);
+  if(newAmt===null)return;
+  newAmt=parseFloat(newAmt);if(isNaN(newAmt)||newAmt<=0)return;
+  var newDesc=prompt("Description:",r.desc||"");
+  if(newDesc===null)return;
+  var newInterval=prompt("Interval (daily/weekly/monthly/yearly):",r.interval);
+  if(newInterval===null)newInterval=r.interval;
+  if(["daily","weekly","monthly","yearly"].indexOf(newInterval)===-1)newInterval=r.interval;
+  var newEnd=prompt("End date (YYYY-MM-DD, leave empty for none):",r.endDate||"");
+  r.amount=newAmt;r.desc=newDesc.trim()||r.desc;r.interval=newInterval;r.endDate=newEnd||"";
+  saveDoc("recurrings",recs);renderTabContent();
+}
+function delRecurring(id){
+  if(!confirm("Delete this recurring item?"))return;
+  state.recurrings=(state.recurrings||[]).filter(function(x){return x.id!==id;});
+  saveDoc("recurrings",state.recurrings);renderTabContent();
+}
+
+// ══════════════════════════════════════════════════════════════
 // WEALTH TAB — PIE CHART + per-account dev chart + dashboard
 // ══════════════════════════════════════════════════════════════
 var wealthFilter="all";
@@ -365,31 +618,17 @@ function renderWealthTab(){
     pieSlices.forEach(function(s){var pct=latestTotal>0?(s.value/latestTotal*100):0;h+='<div class="alloc-row"><span class="alloc-dot" style="background:'+s.color+'"></span><span style="color:#666;flex:1;min-width:80px">'+s.icon+' '+s.label+'</span><span style="font-family:var(--fm);font-weight:600;min-width:40px;text-align:right">'+pct.toFixed(0)+'%</span><span style="font-family:var(--fm);color:#999;font-size:10px;min-width:55px;text-align:right">'+fes(s.value)+'</span></div>';});
     h+='</div></div></div>';
 
-    // ── Monthly wealth growth chart with filter ──
+    // ── Wealth growth AREA chart (stacked, like screenshot) ──
     if(chartData.length>1){
       h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Wealth growth over time</div>';
       h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"><button class="filter-btn'+(wealthFilter==="all"?" active":"")+'" onclick="wealthFilter=\'all\';renderTabContent()">All combined</button>';
-      accounts.forEach(function(a){h+='<button class="filter-btn'+(wealthFilter===a.id?" active":"")+'" onclick="wealthFilter=\''+a.id+'\';renderTabContent()">'+a.icon+' '+a.label+'</button>';});h+='</div>';
-      var maxVal=1;chartData.forEach(function(d){var v=wealthFilter==="all"?d.total:(d[wealthFilter]||0);if(v>maxVal)maxVal=v;});
-      h+='<div class="chart-bar" style="height:120px">';chartData.forEach(function(d){var val=wealthFilter==="all"?d.total:(d[wealthFilter]||0);var pct=Math.max(val/maxVal*100,2);h+='<div class="chart-bar-item" style="height:'+pct+'%;background:var(--accent)"><div class="chart-bar-val">'+fes(val)+'</div></div>';});
-      h+='</div><div style="display:flex;gap:3px">';chartData.forEach(function(d){h+='<div style="flex:1;text-align:center;font-size:9px;color:var(--dim)">'+d.label+'</div>';});h+='</div>';
+      accounts.forEach(function(a){h+='<button class="filter-btn'+(wealthFilter===a.id?" active":"")+'" onclick="wealthFilter=\''+a.id+'\';renderTabContent()">'+a.icon+' '+a.label+'</button>';});
+      h+='</div>';
+      h+=svgAreaChart(chartData,accounts,wealthFilter);
 
       // Monthly changes
       h+='<div style="margin-top:12px;font-size:12px;font-weight:700;margin-bottom:6px">Monthly changes</div>';
       for(var i=chartData.length-1;i>=1&&i>=chartData.length-4;i--){var cur=wealthFilter==="all"?chartData[i].total:(chartData[i][wealthFilter]||0),prv=wealthFilter==="all"?chartData[i-1].total:(chartData[i-1][wealthFilter]||0),chg=cur-prv,cpct=prv>0?((chg/prv)*100):0;h+='<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px"><span style="color:var(--dim)">'+chartData[i].label+'</span><span style="font-family:var(--fm);color:'+(chg>=0?"var(--green)":"var(--red)")+'">'+(chg>=0?"+":"")+fes(chg)+' ('+(cpct>=0?"+":"")+cpct.toFixed(1)+'%)</span></div>';}
-      h+='</div>';
-    }
-
-    // ── Per-account development chart ──
-    if(chartData.length>1&&accounts.length>1){
-      h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Account development</div>';
-      accounts.forEach(function(a,idx){
-        var aMax=1;chartData.forEach(function(d){var v=d[a.id]||0;if(v>aMax)aMax=v;});
-        h+='<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+ACCOLORS[idx%ACCOLORS.length]+'">'+a.icon+' '+a.label+'</div>';
-        h+='<div style="display:flex;align-items:flex-end;gap:2px;height:40px">';
-        chartData.forEach(function(d){var v=d[a.id]||0;var pct=Math.max(v/aMax*100,3);h+='<div style="flex:1;height:'+pct+'%;background:'+ACCOLORS[idx%ACCOLORS.length]+';border-radius:2px 2px 0 0;opacity:0.8" title="'+d.label+': '+fes(v)+'"></div>';});
-        h+='</div><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:2px"><span>'+chartData[0].label+'</span><span>'+fes(chartData[chartData.length-1][a.id]||0)+'</span><span>'+chartData[chartData.length-1].label+'</span></div></div>';
-      });
       h+='</div>';
     }
   }
