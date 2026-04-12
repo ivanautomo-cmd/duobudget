@@ -73,8 +73,7 @@ td{padding:7px 10px}
 </style>
 </head>
 <body>
-<div
- id="app"><div class="loading-screen">Loading DuoBudget...</div></div>
+<div id="app"><div class="loading-screen">Loading DuoBudget...</div></div>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -85,12 +84,12 @@ td{padding:7px 10px}
 // ║  PASTE YOUR FIREBASE CONFIG HERE                            ║
 // ╚══════════════════════════════════════════════════════════════╝
 var firebaseConfig = {
-  apiKey: "AIzaSyCgGct_H34Sp8cJr4XamCzOLvvvCWL6Sn0",
-  authDomain: "duobudget-a480f.firebaseapp.com",
-  projectId: "duobudget-a480f",
-  storageBucket: "duobudget-a480f.firebasestorage.app",
-  messagingSenderId: "686450058537",
-  appId: "1:686450058537:web:dca95ea7f52a7442228338"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -307,7 +306,17 @@ function renderTabContent() {
 }
 
 // ── Add Tab ───────────────────────────────────────────────────
-var addState = { mode: "expense", type: "personal", cat: "groceries", split: "equal", paidBy: "", rInt: "monthly" };
+var addState = { mode: "expense", type: "personal", cat: "groceries", split: "equal", paidBy: "", rInt: "monthly", amt: "", desc: "", date: new Date().toISOString().slice(0, 10), rend: "", custom: "" };
+
+function saveAddInputs() {
+  var a = document.getElementById("add-amt"); if (a) addState.amt = a.value;
+  var d = document.getElementById("add-desc"); if (d) addState.desc = d.value;
+  var dt = document.getElementById("add-date"); if (dt) addState.date = dt.value;
+  var re = document.getElementById("add-rend"); if (re) addState.rend = re.value;
+  var cu = document.getElementById("add-custom"); if (cu) addState.custom = cu.value;
+}
+
+function rerenderAdd() { saveAddInputs(); renderTabContent(); }
 
 function renderAddTab() {
   var u = state.user;
@@ -323,19 +332,19 @@ function renderAddTab() {
 
   // Mode toggle
   html += '<div class="toggle-row">' +
-    '<button class="toggle-btn' + (addState.mode === "expense" ? " active" : "") + '" onclick="addState.mode=\'expense\';renderTabContent()">Expense</button>' +
-    '<button class="toggle-btn' + (addState.mode === "recurring" ? " active-teal" : "") + '" onclick="addState.mode=\'recurring\';renderTabContent()">Recurring \u{1F504}</button>' +
-    '<button class="toggle-btn' + (addState.mode === "income" ? " active-green" : "") + '" onclick="addState.mode=\'income\';renderTabContent()">Income \u{1F4B5}</button></div>';
+    '<button class="toggle-btn' + (addState.mode === "expense" ? " active" : "") + '" onclick="saveAddInputs();addState.mode=\'expense\';rerenderAdd()">Expense</button>' +
+    '<button class="toggle-btn' + (addState.mode === "recurring" ? " active-teal" : "") + '" onclick="saveAddInputs();addState.mode=\'recurring\';rerenderAdd()">Recurring \u{1F504}</button>' +
+    '<button class="toggle-btn' + (addState.mode === "income" ? " active-green" : "") + '" onclick="saveAddInputs();addState.mode=\'income\';rerenderAdd()">Income \u{1F4B5}</button></div>';
 
   // Type toggle (not for income)
   if (addState.mode !== "income") {
     html += '<div class="toggle-row">' +
-      '<button class="toggle-btn' + (addState.type === "personal" ? " active" : "") + '" onclick="addState.type=\'personal\';renderTabContent()">Personal</button>' +
-      '<button class="toggle-btn' + (addState.type === "shared" ? " active-purple" : "") + '" onclick="addState.type=\'shared\';renderTabContent()">Shared</button></div>';
+      '<button class="toggle-btn' + (addState.type === "personal" ? " active" : "") + '" onclick="saveAddInputs();addState.type=\'personal\';rerenderAdd()">Personal</button>' +
+      '<button class="toggle-btn' + (addState.type === "shared" ? " active-purple" : "") + '" onclick="saveAddInputs();addState.type=\'shared\';rerenderAdd()">Shared</button></div>';
   }
 
-  html += '<div class="field"><label>AMOUNT (EUR)</label><input class="inp inp-big" type="number" id="add-amt" placeholder="0.00" step="0.01" min="0"></div>';
-  html += '<div class="field"><label>' + (addState.mode === "income" ? "SOURCE (OPTIONAL)" : "DESCRIPTION (OPTIONAL)") + '</label><input class="inp" id="add-desc" placeholder="' + (addState.mode === "income" ? "e.g. Salary" : "Auto-fills from category") + '"></div>';
+  html += '<div class="field"><label>AMOUNT (EUR)</label><input class="inp inp-big" type="number" id="add-amt" placeholder="0.00" step="0.01" min="0" value="' + (addState.amt || '') + '"></div>';
+  html += '<div class="field"><label>' + (addState.mode === "income" ? "SOURCE (OPTIONAL)" : "DESCRIPTION (OPTIONAL)") + '</label><input class="inp" id="add-desc" placeholder="' + (addState.mode === "income" ? "e.g. Salary" : "Auto-fills from category") + '" value="' + (addState.desc || '').replace(/"/g, '&quot;') + '"></div>';
 
   // Categories (not for income)
   if (addState.mode !== "income") {
@@ -343,7 +352,7 @@ function renderAddTab() {
       html += '<div class="field"><label>QUICK PICK (TOP 5)</label><div style="display:flex;flex-wrap:wrap;gap:6px">';
       top5.forEach(function(cid) {
         var c = state.cats.find(function(x) { return x.id === cid; });
-        if (c) html += '<button class="qp' + (addState.cat === cid ? " active" : "") + '" onclick="addState.cat=\'' + cid + '\';renderTabContent()">' + c.icon + " " + c.label + '</button>';
+        if (c) html += '<button class="qp' + (addState.cat === cid ? " active" : "") + '" onclick="saveAddInputs();addState.cat=\'' + cid + '\';rerenderAdd()">' + c.icon + " " + c.label + '</button>';
       });
       html += '</div></div>';
     }
@@ -354,36 +363,36 @@ function renderAddTab() {
       if (!gc.length) return;
       html += '<div style="margin-bottom:6px"><div style="font-size:10px;color:#aaa;font-weight:600;margin-bottom:3px">' + g.label + '</div><div style="display:flex;flex-wrap:wrap;gap:4px">';
       gc.forEach(function(c) {
-        html += '<button class="pill' + (addState.cat === c.id ? " active" : "") + '" onclick="addState.cat=\'' + c.id + '\';renderTabContent()">' + c.icon + " " + c.label + '</button>';
+        html += '<button class="pill' + (addState.cat === c.id ? " active" : "") + '" onclick="saveAddInputs();addState.cat=\'' + c.id + '\';rerenderAdd()">' + c.icon + " " + c.label + '</button>';
       });
       html += '</div></div>';
     });
     html += '</div>';
   }
 
-  html += '<div class="field"><label>' + (addState.mode === "recurring" ? "START DATE" : "DATE") + '</label><input class="inp" type="date" id="add-date" value="' + new Date().toISOString().slice(0, 10) + '"></div>';
+  html += '<div class="field"><label>' + (addState.mode === "recurring" ? "START DATE" : "DATE") + '</label><input class="inp" type="date" id="add-date" value="' + (addState.date || new Date().toISOString().slice(0, 10)) + '"></div>';
 
   // Recurring fields
   if (addState.mode === "recurring") {
     html += '<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:12px;margin-bottom:12px">' +
       '<div class="field"><label>REPEAT</label><div class="toggle-row">';
     ["daily", "weekly", "monthly", "yearly"].forEach(function(iv) {
-      html += '<button class="toggle-btn' + (addState.rInt === iv ? " active-teal" : "") + '" style="font-size:11px" onclick="addState.rInt=\'' + iv + '\';renderTabContent()">' + iv.charAt(0).toUpperCase() + iv.slice(1) + '</button>';
+      html += '<button class="toggle-btn' + (addState.rInt === iv ? " active-teal" : "") + '" style="font-size:11px" onclick="saveAddInputs();addState.rInt=\'' + iv + '\';rerenderAdd()">' + iv.charAt(0).toUpperCase() + iv.slice(1) + '</button>';
     });
-    html += '</div></div><div class="field"><label>END DATE (OPTIONAL)</label><input class="inp" type="date" id="add-rend"></div></div>';
+    html += '</div></div><div class="field"><label>END DATE (OPTIONAL)</label><input class="inp" type="date" id="add-rend" value="' + (addState.rend || '') + '"></div></div>';
   }
 
   // Shared options
   if (addState.mode !== "income" && addState.type === "shared") {
     html += '<div class="shared-box">' +
       '<div class="field"><label>PAID BY</label><div class="toggle-row">' +
-      '<button class="toggle-btn' + (addState.paidBy === u ? " active" : "") + '" onclick="addState.paidBy=\'' + u + '\';renderTabContent()">' + u + '</button>' +
-      '<button class="toggle-btn' + (addState.paidBy === other ? " active" : "") + '" onclick="addState.paidBy=\'' + other + '\';renderTabContent()">' + other + '</button></div></div>' +
+      '<button class="toggle-btn' + (addState.paidBy === u ? " active" : "") + '" onclick="saveAddInputs();addState.paidBy=\'' + u + '\';rerenderAdd()">' + u + '</button>' +
+      '<button class="toggle-btn' + (addState.paidBy === other ? " active" : "") + '" onclick="saveAddInputs();addState.paidBy=\'' + other + '\';rerenderAdd()">' + other + '</button></div></div>' +
       '<div class="field"><label>SPLIT</label><div class="toggle-row">' +
-      '<button class="toggle-btn' + (addState.split === "equal" ? " active" : "") + '" onclick="addState.split=\'equal\';renderTabContent()">50/50</button>' +
-      '<button class="toggle-btn' + (addState.split === "custom" ? " active" : "") + '" onclick="addState.split=\'custom\';renderTabContent()">Custom</button></div></div>';
+      '<button class="toggle-btn' + (addState.split === "equal" ? " active" : "") + '" onclick="saveAddInputs();addState.split=\'equal\';rerenderAdd()">50/50</button>' +
+      '<button class="toggle-btn' + (addState.split === "custom" ? " active" : "") + '" onclick="saveAddInputs();addState.split=\'custom\';rerenderAdd()">Custom</button></div></div>';
     if (addState.split === "custom") {
-      html += '<div class="field"><label>YOUR SHARE (\u20AC)</label><input class="inp" type="number" id="add-custom" step="0.01"></div>';
+      html += '<div class="field"><label>YOUR SHARE (\u20AC)</label><input class="inp" type="number" id="add-custom" step="0.01" value="' + (addState.custom || '') + '"></div>';
     }
     html += '</div>';
   }
@@ -420,6 +429,7 @@ function submitExpense() {
   }
 
   // Reset form
+  addState.amt = ""; addState.desc = ""; addState.date = new Date().toISOString().slice(0, 10); addState.custom = ""; addState.rend = "";
   document.getElementById("add-amt").value = "";
   document.getElementById("add-desc").value = "";
 
@@ -721,12 +731,15 @@ function renderSettingsTab() {
   });
   html += '<tr style="background:#f8f7f5;font-weight:700"><td>Total</td><td style="text-align:right;font-family:var(--fm)">' + fe(totalBud) + '</td><td style="text-align:right;font-family:var(--fm);font-size:11px">100%</td><td></td></tr></tbody></table></div>';
 
-  // Add budget item
-  html += '<div class="card" style="padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Add Budget Item</div><div style="display:flex;gap:6px"><select class="inp" id="bud-cat" style="flex:1"><option value="">Select...</option>';
+  // Add budget item — dropdown OR free text
+  html += '<div class="card" style="padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Add Budget Item</div>';
+  html += '<div style="display:flex;gap:6px;margin-bottom:8px"><select class="inp" id="bud-cat" style="flex:1" onchange="if(this.value){document.getElementById(\'bud-cat-free\').value=\'\';}"><option value="">Select existing...</option>';
   state.cats.filter(function(c) { return !budget.some(function(b) { return b.cat === c.id; }); }).forEach(function(c) {
     html += '<option value="' + c.id + '">' + c.icon + ' ' + c.label + '</option>';
   });
-  html += '</select><input class="inp" id="bud-amt" type="number" style="width:80px;text-align:right" placeholder="0" step="0.5"><button class="submit-btn" style="width:auto;padding:8px 14px;font-size:12px;margin-top:0" onclick="addBudgetItem()">+</button></div></div>';
+  html += '</select></div>';
+  html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px">Or type a new category name:</div>';
+  html += '<div style="display:flex;gap:6px"><input class="inp" id="bud-cat-free" style="flex:1" placeholder="e.g. Pet expenses" oninput="if(this.value){document.getElementById(\'bud-cat\').value=\'\';}"><input class="inp" id="bud-amt" type="number" style="width:80px;text-align:right" placeholder="0" step="0.5"><button class="submit-btn" style="width:auto;padding:8px 14px;font-size:12px;margin-top:0" onclick="addBudgetItem()">+</button></div></div>';
 
   return html;
 }
@@ -752,7 +765,23 @@ function updateBudget(catId, val) {
 
 function addBudgetItem() {
   var cat = document.getElementById("bud-cat").value;
+  var freeCat = document.getElementById("bud-cat-free").value.trim();
   var amt = document.getElementById("bud-amt").value;
+  if (!amt) return;
+
+  if (freeCat && !cat) {
+    // Create new category from free text
+    var newId = freeCat.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 20) + "_" + gid().slice(-3);
+    // Check if category name already exists
+    var existing = state.cats.find(function(c) { return c.label.toLowerCase() === freeCat.toLowerCase(); });
+    if (existing) {
+      cat = existing.id;
+    } else {
+      state.cats.push({ id: newId, label: freeCat, icon: "\u{1F4E6}", group: "variable" });
+      saveDoc("cats", state.cats);
+      cat = newId;
+    }
+  }
   if (cat && amt) { updateBudget(cat, amt); }
 }
 
