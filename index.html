@@ -457,18 +457,20 @@ function renderDashboardTab(){
   var dLM=prevSpentVal>0?((curSpent-prevSpentVal)/prevSpentVal*100):0,dAv=avg12>0?((curSpent-avg12)/avg12*100):0;
 
   var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 class="sec-title">Dashboard</h2>'+monthPicker()+'</div>';
-  h+='<div class="kpi kpi-3"><div class="kpi-card"><div class="kpi-label">INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(totalIncome)+'</div></div><div class="kpi-card"><div class="kpi-label">SPENT</div><div class="kpi-val">'+fes(curSpent)+'</div><div class="kpi-sub">of '+fes(totalBudget)+'</div></div><div class="kpi-card"><div class="kpi-label">REMAINING</div><div class="kpi-val" style="color:'+(remaining>=0?"var(--green)":"var(--red)")+'">'+fes(remaining)+'</div></div></div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:14px;align-items:flex-start">';
+  h+='<div class="kpi-card" style="flex:0 0 auto;min-width:110px"><div class="kpi-label">SPENT</div><div class="kpi-val">'+fes(curSpent)+'</div><div class="kpi-sub">of '+fes(totalBudget)+'</div></div>';
+  h+='<div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 10px 8px">';
+  var maxC2=Math.max(curSpent,prevSpentVal,avg12,1);
+  [{label:"This mo",val:curSpent,color:"var(--accent)"},{label:"Last mo",val:prevSpentVal,color:"#8b5cf6"},{label:"Avg",val:avg12,color:"#f59e0b"}].forEach(function(item){var pct=maxC2>0?(item.val/maxC2*100):0;h+='<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px"><span style="font-size:9px;color:var(--dim);min-width:44px">'+item.label+'</span><div style="flex:1;height:10px;background:#f0eeeb;border-radius:3px;overflow:hidden"><div style="height:100%;border-radius:3px;background:'+item.color+';width:'+pct+'%"></div></div><span style="font-size:9px;font-family:var(--fm);min-width:42px;text-align:right">'+fes(item.val)+'</span></div>';});
+  h+='<div style="display:flex;gap:8px;margin-top:4px"><div style="font-size:9px;color:'+(dLM>0?"var(--red)":"var(--green)")+'">vs last: '+(dLM>0?"+":"")+dLM.toFixed(1)+'%</div><div style="font-size:9px;color:'+(dAv>0?"var(--red)":"var(--green)")+'">vs avg: '+(dAv>0?"+":"")+dAv.toFixed(1)+'%</div></div>';
+  h+='</div></div>';
 
-  // Comparison bars
-  var maxC=Math.max(curSpent,prevSpentVal,avg12,1);
-  h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">Spending comparison</div>';
-  [{label:"This month",val:curSpent,color:"var(--accent)"},{label:"Last month",val:prevSpentVal,color:"#8b5cf6"},{label:"12-month avg",val:avg12,color:"#f59e0b"}].forEach(function(item){var pct=maxC>0?(item.val/maxC*100):0;h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:11px;color:var(--dim);min-width:80px">'+item.label+'</span><div style="flex:1;height:16px;background:#f0eeeb;border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:'+item.color+';width:'+pct+'%"></div></div><span style="font-size:11px;font-family:var(--fm);min-width:65px;text-align:right">'+fes(item.val)+'</span></div>';});
-  h+='<div style="display:flex;gap:12px;margin-top:8px"><div style="font-size:11px;color:'+(dLM>0?"var(--red)":"var(--green)")+'">vs last mo: '+(dLM>0?"+":"")+dLM.toFixed(1)+'%</div><div style="font-size:11px;color:'+(dAv>0?"var(--red)":"var(--green)")+'">vs avg: '+(dAv>0?"+":"")+dAv.toFixed(1)+'%</div></div></div>';
 
-  // 6-month trend
-  var tD=[];for(var i=5;i>=0;i--){var cm=m-i,cy=y;while(cm<=0){cm+=12;cy--;}tD.push({label:MS[cm-1],spent:allM[cy+"-"+String(cm).padStart(2,"0")]||0});}
+
+  // 3-month trend
+  var tD=[];for(var i=2;i>=0;i--){var cm=m-i,cy=y;while(cm<=0){cm+=12;cy--;}tD.push({label:MS[cm-1],spent:allM[cy+"-"+String(cm).padStart(2,"0")]||0});}
   var maxT=1;tD.forEach(function(d){if(d.spent>maxT)maxT=d.spent;});
-  h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">6-month expense trend</div><div class="chart-bar">';
+  h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">3-month expense trend</div><div class="chart-bar">';
   tD.forEach(function(d){var pct=Math.max(d.spent/maxT*100,2);h+='<div class="chart-bar-item" style="height:'+pct+'%;background:'+(d.label===MS[m-1]?"var(--accent)":"#c5d5e8")+'"><div class="chart-bar-val">'+fes(d.spent)+'</div></div>';});
   h+='</div><div style="display:flex;gap:3px">';tD.forEach(function(d){h+='<div style="flex:1;text-align:center;font-size:9px;color:var(--dim)">'+d.label+'</div>';});h+='</div></div>';
 
@@ -607,15 +609,9 @@ function getStockNetIncome(user,mk){
 function renderStockTab(){
   var u=state.user,mk=state.month,entries=state.stockEntries[u]||[];
   var net=getStockNetIncome(u,mk);
-  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 class="sec-title">ð Stock</h2>'+monthPicker()+'</div>';
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 class="sec-title">&#x1F4C8; Stock</h2>'+monthPicker()+'</div>';
 
-  h+='<div class="kpi kpi-3" style="margin-bottom:14px">';
-  h+='<div class="kpi-card"><div class="kpi-label">STOCK INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(net.income)+'</div></div>';
-  h+='<div class="kpi-card"><div class="kpi-label">CUT LOSS</div><div class="kpi-val" style="color:var(--red)">'+fes(net.loss)+'</div></div>';
-  h+='<div class="kpi-card"><div class="kpi-label">NET</div><div class="kpi-val" style="color:'+(net.net>=0?"var(--green)":"var(--red)")+'">'+fes(net.net)+'</div></div>';
-  h+='</div>';
-
-  h+='<div class="toggle-row"><button class="toggle-btn'+(stockState.mode==="income"?" active-green":"")+'" onclick="stockState.mode=\'income\';renderTabContent()">Income ðµ</button><button class="toggle-btn'+(stockState.mode==="cutloss"?" active-purple":"")+'" onclick="stockState.mode=\'cutloss\';renderTabContent()">Cut Loss ð</button></div>';
+  h+='<div class="toggle-row"><button class="toggle-btn'+(stockState.mode==="income"?" active-green":"")+'" onclick="stockState.mode=\'income\';renderTabContent()">Income &#x1F4B5;</button><button class="toggle-btn'+(stockState.mode==="cutloss"?" active-purple":"")+'" onclick="stockState.mode=\'cutloss\';renderTabContent()">Cut Loss &#x1F4C9;</button></div>';
 
   if(stockState.mode==="income"){
     h+='<div class="toggle-row">';
@@ -632,12 +628,17 @@ function renderStockTab(){
       var lbl=stockState.subtype==="capitalgain"?"Capital Gain (€)":"Dividend (€)";
       h+='<div class="field"><label>STOCK NAME</label><input class="inp" id="stk-name" placeholder="e.g. AAPL, MSCI World"></div>';
       h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-      h+='<div class="field"><label>'+lbl+'</label><input class="inp" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
-      h+='<div class="field"><label>RETURN (%)</label><input class="inp" type="number" id="stk-ret" placeholder="0.0" step="0.1"></div>';
-      h+='<div class="field"><label>TAX FEE (€)</label><input class="inp" type="number" id="stk-tax" placeholder="0.00" step="0.01" min="0"></div>';
-      h+='<div class="field"><label>TRANSACTION COST (€)</label><input class="inp" type="number" id="stk-cost" placeholder="0.00" step="0.01" min="0"></div>';
+      if(stockState.subtype==="capitalgain"){
+        h+='<div class="field"><label>'+lbl+'</label><input class="inp" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
+        h+='<div class="field"><label>RETURN (%)</label><input class="inp" type="number" id="stk-ret" placeholder="0.0" step="0.1"></div>';
+        h+='<div class="field"><label>TAX FEE (€)</label><input class="inp" type="number" id="stk-tax" placeholder="0.00" step="0.01" min="0"></div>';
+        h+='<div class="field"><label>TRANSACTION COST (€)</label><input class="inp" type="number" id="stk-cost" placeholder="0.00" step="0.01" min="0"></div>';
+      } else {
+        h+='<div class="field"><label>'+lbl+'</label><input class="inp" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
+        h+='<div class="field"><label>TAX FEE (€)</label><input class="inp" type="number" id="stk-tax" placeholder="0.00" step="0.01" min="0"></div>';
+      }
       h+='</div>';
-      h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:11px;color:var(--dim);margin-bottom:10px">Net = Gross − Tax fee − Transaction cost</div>';
+      h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:11px;color:var(--dim);margin-bottom:10px">'+( stockState.subtype==="capitalgain"?"Net = Capital Gain − Tax fee − Transaction cost":"Net = Dividend − Tax fee")+' </div>';
       h+='<button class="submit-btn" style="background:var(--green)" onclick="submitStockEntry()">Add '+(stockState.subtype==="capitalgain"?"Capital Gain":"Dividend")+'</button>';
     }
     h+='</div>';
@@ -662,7 +663,7 @@ function renderStockTab(){
     h+='<h3 class="sec-h">This month\u2019s entries</h3><div class="card" style="padding:8px 14px">';
     monthEntries.forEach(function(e){
       var isLoss=e.entryType==="cutloss";
-      var icon=isLoss?"ð":(e.entryType==="interest"?"ð°":(e.entryType==="dividend"?"ð¸":"ð"));
+      var icon=isLoss?"&#x1F4C9;":(e.entryType==="interest"?"&#x1F4B0;":(e.entryType==="dividend"?"&#x1F4B8;":"&#x1F4C8;"));
       var typeLabel=isLoss?"Cut Loss":(e.entryType==="interest"?"Interest":(e.entryType==="dividend"?"Dividend":"Capital Gain"));
       var amt=isLoss?(e.amount):(e.netAmount||e.amount);
       h+='<div class="tx-row"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="font-size:18px">'+icon+'</span><div style="min-width:0"><div class="tx-desc">'+typeLabel+(e.stockName?' · '+e.stockName:'')+'</div><div class="tx-meta">'+e.month+(e.returnPct?' · '+e.returnPct+'%':'')+'</div></div></div><div style="display:flex;align-items:center;gap:6px"><span class="tx-amt" style="color:'+(isLoss?"var(--red)":"var(--green)")+'">'+(isLoss?"-":"+")+fe(Math.abs(amt))+'</span><button class="del-btn" onclick="delStockEntry(\''+e.id+'\')">\u00d7</button></div></div>';
@@ -670,6 +671,122 @@ function renderStockTab(){
     h+='</div>';
   }
   return h;
+}
+
+
+// ── Stock monthly bar+line chart (last 3 months) ──
+function renderStockBarLineChart(u) {
+  var entries = state.stockEntries[u] || [];
+  if (!entries.length) return '';
+
+  // Build last 3 months
+  var now = new Date();
+  var months = [];
+  for (var i = 2; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var mk = getMonthKey(d);
+    var div = 0, interest = 0, capgain = 0, cutloss = 0;
+    entries.forEach(function(e) {
+      if (e.month !== mk) return;
+      if (e.entryType === 'dividend') div += e.netAmount || 0;
+      else if (e.entryType === 'interest') interest += e.amount || 0;
+      else if (e.entryType === 'capitalgain') capgain += e.netAmount || 0;
+      else if (e.entryType === 'cutloss') cutloss += e.amount || 0;
+    });
+    var net = div + interest + capgain - cutloss;
+    months.push({ label: MS[d.getMonth()] + " '" + String(d.getFullYear()).slice(2), mk: mk, div: div, interest: interest, capgain: capgain, cutloss: cutloss, net: net });
+  }
+
+  var hasAny = months.some(function(m) { return m.div || m.interest || m.capgain || m.cutloss; });
+  if (!hasAny) return '';
+
+  // Chart dimensions
+  var W = 500, H = 200, padL = 14, padR = 34, padT = 20, padB = 28;
+  var innerW = W - padL - padR, innerH = H - padT - padB;
+  var n = months.length; // 3
+  var groupW = innerW / n;
+  var barW = groupW * 0.18; // 4 bars per group
+  var COLORS = { div: '#16a34a', interest: '#0d9488', capgain: '#1e3a5f', cutloss: '#dc2626' };
+  var SERIES = ['div','interest','capgain','cutloss'];
+  var LABELS = { div:'Dividend', interest:'Interest', capgain:'Cap. Gain', cutloss:'Cut Loss' };
+
+  // Find max positive and max negative for Y scale
+  var maxPos = 1, maxNeg = 0;
+  months.forEach(function(m) {
+    var pos = m.div + m.interest + m.capgain;
+    var neg = m.cutloss;
+    if (pos > maxPos) maxPos = pos;
+    if (neg > maxNeg) maxNeg = neg;
+    if (Math.abs(m.net) > maxPos) maxPos = Math.abs(m.net);
+  });
+  // Y range: from -maxNeg to maxPos
+  var yTotal = maxPos + maxNeg;
+  var zeroY = padT + innerH * (maxPos / yTotal); // pixel position of zero line
+
+  function yPos(v) {
+    // positive v goes up from zeroY, negative goes down
+    return zeroY - (v / yTotal) * innerH;
+  }
+
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;overflow:visible">';
+
+  // Grid lines
+  var gridVals = [maxPos, maxPos / 2, 0];
+  if (maxNeg > 0) gridVals.push(-maxNeg / 2, -maxNeg);
+  gridVals.forEach(function(gv) {
+    var gy = yPos(gv);
+    var isZero = gv === 0;
+    svg += '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" stroke="' + (isZero ? '#aaa' : '#e8e5e0') + '" stroke-width="' + (isZero ? '1.5' : '1') + '"/>';
+    svg += '<text x="' + (W - padR + 2) + '" y="' + (gy + 3).toFixed(1) + '" font-size="8" fill="#bbb" text-anchor="start">' + (Math.abs(gv) >= 1000 ? (gv / 1000).toFixed(1) + 'k' : gv.toFixed(0)) + '</text>';
+  });
+
+  // Bars (4 per month group, side by side)
+  months.forEach(function(m, gi) {
+    var groupX = padL + gi * groupW + groupW * 0.1;
+    SERIES.forEach(function(key, si) {
+      var val = key === 'cutloss' ? -m[key] : m[key];
+      if (val === 0) return;
+      var x = groupX + si * (barW + 1);
+      var barH = Math.abs(val / yTotal * innerH);
+      var y = val >= 0 ? (zeroY - barH) : zeroY;
+      svg += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(barH, 1).toFixed(1) + '" fill="' + COLORS[key] + '" rx="2"/>';
+    });
+  });
+
+  // Net line
+  var netPts = months.map(function(m, i) {
+    var cx = padL + i * groupW + groupW / 2;
+    return cx.toFixed(1) + ',' + yPos(m.net).toFixed(1);
+  }).join(' ');
+  svg += '<polyline points="' + netPts + '" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  // Net dots + labels
+  months.forEach(function(m, i) {
+    var cx = padL + i * groupW + groupW / 2;
+    var cy = yPos(m.net);
+    svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="#f59e0b" stroke="white" stroke-width="1.5"/>';
+    // value label above/below dot
+    var labelY = m.net >= 0 ? cy - 7 : cy + 13;
+    var netLabel = (m.net >= 0 ? '+' : '') + (Math.abs(m.net) >= 1000 ? (m.net / 1000).toFixed(1) + 'k' : m.net.toFixed(0));
+    svg += '<text x="' + cx.toFixed(1) + '" y="' + labelY.toFixed(1) + '" font-size="8" fill="#f59e0b" text-anchor="middle" font-weight="700">' + netLabel + '</text>';
+  });
+
+  // X axis labels (month names)
+  months.forEach(function(m, i) {
+    var cx = padL + i * groupW + groupW / 2;
+    svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 4) + '" font-size="9" fill="#999" text-anchor="middle">' + m.label + '</text>';
+  });
+
+  svg += '</svg>';
+
+  // Legend
+  var legend = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">';
+  Object.keys(COLORS).forEach(function(key) {
+    legend += '<div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="width:10px;height:10px;border-radius:2px;background:' + COLORS[key] + ';display:inline-block"></span>' + LABELS[key] + '</div>';
+  });
+  legend += '<div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="display:inline-block;width:16px;height:2.5px;background:#f59e0b;border-radius:1px"></span>Net</div>';
+  legend += '</div>';
+
+  return '<div class="card" style="padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Performance by type \u2014 last 3 months</div>' + svg + legend + '</div>';
 }
 
 function renderStockDashboard(u){
@@ -687,17 +804,11 @@ function renderStockDashboard(u){
   var totNet=totInc-totLoss;
 
   var h='<h3 class="sec-h">Stock performance</h3>';
-  h+='<div class="kpi kpi-2" style="margin-bottom:14px">';
-  h+='<div class="kpi-card"><div class="kpi-label">ALL-TIME INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(totInc)+'</div></div>';
-  h+='<div class="kpi-card"><div class="kpi-label">ALL-TIME LOSSES</div><div class="kpi-val" style="color:var(--red)">'+fes(totLoss)+'</div></div>';
-  h+='<div class="kpi-card" style="grid-column:1/-1"><div class="kpi-label">NET ALL-TIME</div><div class="kpi-val" style="color:'+(totNet>=0?"var(--green)":"var(--red)")+'">'+(totNet>=0?"+":"")+fe(totNet)+'</div></div>';
+  h+='<div class="kpi" style="margin-bottom:14px">';
+  h+='<div class="kpi-card"><div class="kpi-label">NET ALL-TIME</div><div class="kpi-val" style="color:'+(totNet>=0?"var(--green)":"var(--red)")+'">'+(totNet>=0?"+":"")+fe(totNet)+'</div></div>';
   h+='</div>';
 
-  h+='<div class="card" style="padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">By type (all-time net)</div>';
-  var types=[{label:"Interest",val:byType.interest,color:"#0d9488",icon:"ð°"},{label:"Capital Gain",val:byType.capitalgain,color:"#1e3a5f",icon:"ð"},{label:"Dividend",val:byType.dividend,color:"#16a34a",icon:"ð¸"},{label:"Cut Loss",val:-byType.cutloss,color:"#dc2626",icon:"ð"}];
-  types.forEach(function(item){
-    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:14px">'+item.icon+'</span><span style="font-size:11px;color:var(--dim);min-width:90px">'+item.label+'</span><span style="font-family:var(--fm);font-size:12px;font-weight:600;color:'+(item.val>=0?"var(--green)":"var(--red)")+'">'+(item.val>=0?"+":"")+fe(item.val)+'</span></div>';
-  });
+  h+=renderStockBarLineChart(u);
   h+='</div>';
 
   var byStock={};
@@ -708,7 +819,7 @@ function renderStockDashboard(u){
     else byStock[e.stockName].net+=e.netAmount||e.amount||0;
     byStock[e.stockName].count++;
   });
-  var stockList=Object.values(byStock).sort(function(a,b){return b.net-a.net;});
+  var stockList=Object.values(byStock).sort(function(a,b){return b.net-a.net;}).slice(0,3);
   if(stockList.length>0){
     h+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:14px"><div style="font-size:12px;font-weight:700;padding:12px 14px 8px">Per stock performance</div><table><thead><tr style="background:#f8f7f5"><th>Stock</th><th style="text-align:right">Net gain</th><th style="text-align:right">Entries</th></tr></thead><tbody>';
     stockList.forEach(function(s){
@@ -743,11 +854,11 @@ function submitStockEntry(){
       entry.netAmount=amt;
     } else {
       var tax=taxEl?parseFloat(taxEl.value)||0:0;
-      var cost=costEl?parseFloat(costEl.value)||0:0;
+      var cost=(stockState.subtype==="capitalgain"&&costEl)?parseFloat(costEl.value)||0:0;
       entry.stockName=nameEl?nameEl.value.trim():"";
       entry.taxFee=tax;entry.transactionCost=cost;
       entry.netAmount=amt-tax-cost;
-      entry.returnPct=retEl?retEl.value.trim():"";
+      entry.returnPct=(stockState.subtype==="capitalgain"&&retEl)?retEl.value.trim():"";
     }
   }
   if(!state.stockEntries[u])state.stockEntries[u]=[];
@@ -764,11 +875,11 @@ function delStockEntry(id){
   saveDoc("stk-"+u,state.stockEntries[u]);_cumCache={};renderTabContent();
 }
 
-// ── Income growth line chart (last 9 months) ──
+// ── Income growth line chart (last 3 months) ──
 function renderIncomeGrowthChart(u){
   var months=[];
   var now=new Date();
-  for(var i=8;i>=0;i--){
+  for(var i=2;i>=0;i--){
     var d=new Date(now.getFullYear(),now.getMonth()-i,1);
     var mk=getMonthKey(d);
     var salaryInc=0;
@@ -794,10 +905,10 @@ function renderIncomeGrowthChart(u){
   svg+='<polygon points="'+totAreaPts+'" fill="url(#iggrad)"/>';
   svg+='<polyline points="'+totFillPts+'" fill="none" stroke="#1e3a5f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
   months.forEach(function(m,i){svg+='<circle cx="'+xp(i).toFixed(1)+'" cy="'+yp(m.total).toFixed(1)+'" r="3" fill="#1e3a5f" stroke="white" stroke-width="1.5"/>';});
-  months.forEach(function(m,i){if(i%3===0||i===n-1)svg+='<text x="'+xp(i).toFixed(1)+'" y="'+(H-3)+'" font-size="9" fill="#999" text-anchor="middle">'+m.label+'</text>';});
+  months.forEach(function(m,i){svg+='<text x="'+xp(i).toFixed(1)+'" y="'+(H-3)+'" font-size="9" fill="#999" text-anchor="middle">'+m.label+'</text>';});
   svg+='</svg>';
   var legend='<div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="display:inline-block;width:16px;height:2.5px;background:#1e3a5f;border-radius:1px"></span>Total income</div><div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #c5d5e8"></span>Salary only</div></div>';
-  return'<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Income growth (9 months)</div>'+svg+legend+'</div>';
+  return'<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Income growth (3 months)</div>'+svg+legend+'</div>';
 }
 
 // ══════════════════════════════════════════════════════════════
