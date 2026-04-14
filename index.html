@@ -111,7 +111,7 @@ function loadDoc(k,fb){return docRef(k).get().then(function(s){return s.exists?s
 function saveDoc(k,v){return docRef(k).set({value:v,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}
 function listenDoc(k,cb){if(LISTENERS[k])LISTENERS[k]();LISTENERS[k]=docRef(k).onSnapshot(function(s){if(s.exists)cb(s.data().value);});}
 
-var state={user:null,authUser:null,authLoading:true,authError:"",expenses:[],settlements:[],recurrings:[],cats:[],budgets:{},wealth:{},wAccounts:{},wTargets:{},tab:"add",month:getMonthKey(new Date()),loading:true};
+var state={user:null,authUser:null,authLoading:true,authError:"",expenses:[],settlements:[],recurrings:[],cats:[],budgets:{},wealth:{},wAccounts:{},wTargets:{},stockEntries:{},tab:"add",month:getMonthKey(new Date()),loading:true};
 var USERS=["Ivana","Adi"],MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var GROUPS=[{id:"fix",label:"Fixed Costs"},{id:"variable",label:"Variable"},{id:"asset",label:"Assets"},{id:"saving",label:"Savings"}];
 var ACCOLORS=["#1e3a5f","#f59e0b","#10b981","#8b5cf6","#ec4899","#06b6d4","#ef4444","#84cc16"];
@@ -167,7 +167,7 @@ function getMonthTotalSpend(user,mk){
 }
 
 // ── SVG Area Chart helper (stacked, multi-series, like screenshot) ──
-function svgAreaChart(chartData, accounts, filter) {
+function svgAreaChart(chartData, accounts, filter, yMin) {
   var W=500, H=160, padL=8, padR=8, padT=18, padB=22;
   var innerW=W-padL-padR, innerH=H-padT-padB;
   var n=chartData.length;
@@ -178,22 +178,24 @@ function svgAreaChart(chartData, accounts, filter) {
   var seriesColors=["#1e3a5f","#7c3aed","#16a34a","#0d9488","#f59e0b","#ec4899"];
   var AREA_ALPHA=["0.75","0.55","0.40","0.30","0.22","0.16"];
 
-  // Build data values
+  // Build data values with flexible Y axis
+  var yMinVal=isNaN(yMin)?0:(+yMin||0);
   var maxVal=1;
   chartData.forEach(function(d){
     var v=filter==="all"?d.total:(d[filter]||0);
     if(v>maxVal)maxVal=v;
   });
+  if(maxVal<=yMinVal)maxVal=yMinVal+1000;
 
   function xPos(i){return padL+innerW*(i/(n-1));}
-  function yPos(v){return padT+innerH*(1-v/maxVal);}
+  function yPos(v){var range=maxVal-yMinVal;var clamped=Math.max(v-yMinVal,0);return padT+innerH*(1-clamped/range);}
 
   var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;overflow:visible">';
 
   // Grid lines (3 horizontal)
   for(var g=0;g<=2;g++){
     var gy=padT+innerH*(g/2);
-    var gval=maxVal*(1-g/2);
+    var gval=yMinVal+(maxVal-yMinVal)*(1-g/2);
     svg+='<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="#e8e5e0" stroke-width="1"/>';
     svg+='<text x="'+(W-padR+2)+'" y="'+(gy+3).toFixed(1)+'" font-size="8" fill="#bbb" text-anchor="start">'+Math.round(gval/1000)+'k</text>';
   }
@@ -336,9 +338,9 @@ async function initApp(){
 }
 
 async function loadData(){
-  try{var r=await Promise.all([loadDoc("expenses",[]),loadDoc("settlements",[]),loadDoc("recurrings",[]),loadDoc("cats",DEFAULT_CATS),loadDoc("bud-Ivana",DEFAULT_BUDGET),loadDoc("bud-Adi",DEFAULT_BUDGET),loadDoc("wlth-Ivana",[]),loadDoc("wlth-Adi",[]),loadDoc("wacc-Ivana",DEFAULT_WACC),loadDoc("wacc-Adi",DEFAULT_WACC),loadDoc("wtgt-Ivana",{yearEnd:50000,year:2026}),loadDoc("wtgt-Adi",{yearEnd:50000,year:2026})]);
-  state.expenses=r[0]||[];state.settlements=r[1]||[];state.recurrings=r[2]||[];state.cats=r[3]||DEFAULT_CATS;state.budgets={Ivana:r[4]||DEFAULT_BUDGET,Adi:r[5]||DEFAULT_BUDGET};state.wealth={Ivana:r[6]||[],Adi:r[7]||[]};state.wAccounts={Ivana:r[8]||DEFAULT_WACC,Adi:r[9]||DEFAULT_WACC};state.wTargets={Ivana:r[10]||{yearEnd:50000,year:2026},Adi:r[11]||{yearEnd:50000,year:2026}};state.loading=false;
-  listenDoc("expenses",function(v){state.expenses=v||[];_cumCache={};render();});listenDoc("settlements",function(v){state.settlements=v||[];render();});listenDoc("cats",function(v){state.cats=v||DEFAULT_CATS;render();});listenDoc("recurrings",function(v){state.recurrings=v||[];render();});
+  try{var r=await Promise.all([loadDoc("expenses",[]),loadDoc("settlements",[]),loadDoc("recurrings",[]),loadDoc("cats",DEFAULT_CATS),loadDoc("bud-Ivana",DEFAULT_BUDGET),loadDoc("bud-Adi",DEFAULT_BUDGET),loadDoc("wlth-Ivana",[]),loadDoc("wlth-Adi",[]),loadDoc("wacc-Ivana",DEFAULT_WACC),loadDoc("wacc-Adi",DEFAULT_WACC),loadDoc("wtgt-Ivana",{yearEnd:50000,year:2026}),loadDoc("wtgt-Adi",{yearEnd:50000,year:2026}),loadDoc("stk-Ivana",[]),loadDoc("stk-Adi",[])]);
+  state.expenses=r[0]||[];state.settlements=r[1]||[];state.recurrings=r[2]||[];state.cats=r[3]||DEFAULT_CATS;state.budgets={Ivana:r[4]||DEFAULT_BUDGET,Adi:r[5]||DEFAULT_BUDGET};state.wealth={Ivana:r[6]||[],Adi:r[7]||[]};state.wAccounts={Ivana:r[8]||DEFAULT_WACC,Adi:r[9]||DEFAULT_WACC};state.wTargets={Ivana:r[10]||{yearEnd:50000,year:2026},Adi:r[11]||{yearEnd:50000,year:2026}};state.stockEntries={Ivana:r[12]||[],Adi:r[13]||[]};state.loading=false;
+  listenDoc("expenses",function(v){state.expenses=v||[];_cumCache={};render();});listenDoc("settlements",function(v){state.settlements=v||[];render();});listenDoc("cats",function(v){state.cats=v||DEFAULT_CATS;render();});listenDoc("recurrings",function(v){state.recurrings=v||[];render();});USERS.forEach(function(u){listenDoc("stk-"+u,function(v){state.stockEntries[u]=v||[];render();});});
   USERS.forEach(function(u){listenDoc("bud-"+u,function(v){state.budgets[u]=v||DEFAULT_BUDGET;_cumCache={};render();});listenDoc("wlth-"+u,function(v){state.wealth[u]=v||[];render();});listenDoc("wacc-"+u,function(v){state.wAccounts[u]=v||DEFAULT_WACC;render();});listenDoc("wtgt-"+u,function(v){state.wTargets[u]=v||{yearEnd:50000,year:2026};render();});});
   render();}catch(e){console.error(e);document.getElementById("app").innerHTML='<div class="loading-screen">Error connecting to Firebase.</div>';}}
 
@@ -353,13 +355,13 @@ function renderAuthLogin(){
 }
 
 function renderLogin(){return'<div class="login-wrap"><div class="login-card"><div style="font-size:40px;margin-bottom:8px">\u{1F4B6}</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">DuoBudget</h1><p style="font-size:13px;color:#8a8a8a;margin-bottom:4px">Signed in as '+state.authUser.email+'</p><p style="font-size:13px;color:#8a8a8a;margin-bottom:24px">Who\u2019s using the app?</p><div style="display:flex;gap:12px">'+USERS.map(function(u){return'<button class="login-btn" onclick="loginAs(\''+u+'\')"><span class="av">'+u.charAt(0)+'</span><span>'+u+'</span></button>';}).join("")+'</div><button style="margin-top:16px;background:none;border:none;color:var(--dim);font-size:11px;cursor:pointer;text-decoration:underline" onclick="googleSignOut()">Sign out</button></div></div>';}
-function renderShell(){var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);var bt=balance===0?"Settled up with "+other+" \u2713":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));var tabs=[{id:"add",label:"+ Add"},{id:"budget",label:"Budget"},{id:"dashboard",label:"Dashboard"},{id:"split",label:"Split"},{id:"recurring",label:"\u{1F504} Recurring"},{id:"wealth",label:"Wealth"},{id:"settings",label:"\u2699"}];return'<div class="shell"><header class="hdr"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">\u{1F4B6}</span><span style="font-weight:800;font-size:16px">DuoBudget</span></div><div style="display:flex;gap:6px;align-items:center"><button class="badge" onclick="logout()"><span class="av av-sm">'+u.charAt(0)+'</span><span>'+u+'</span></button><button style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--dim)" onclick="googleSignOut()" title="Sign out Google">\u{1F6AA}</button></div></header><div class="bal">'+bt+'</div><nav class="tabs">'+tabs.map(function(t){return'<button class="tab'+(state.tab===t.id?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>';}).join("")+'</nav><main class="main" id="tab-content"></main></div>';}
+function renderShell(){var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);var bt=balance===0?"Settled up with "+other+" \u2713":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));var tabs=[{id:"add",label:"+ Add"},{id:"budget",label:"Budget"},{id:"dashboard",label:"Dashboard"},{id:"split",label:"Split"},{id:"recurring",label:"\u{1F504} Recurring"},{id:"stock",label:"\u{1F4C8} Stock"},{id:"wealth",label:"Wealth"},{id:"settings",label:"\u2699"}];return'<div class="shell"><header class="hdr"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">\u{1F4B6}</span><span style="font-weight:800;font-size:16px">DuoBudget</span></div><div style="display:flex;gap:6px;align-items:center"><button class="badge" onclick="logout()"><span class="av av-sm">'+u.charAt(0)+'</span><span>'+u+'</span></button><button style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--dim)" onclick="googleSignOut()" title="Sign out Google">\u{1F6AA}</button></div></header><div class="bal">'+bt+'</div><nav class="tabs">'+tabs.map(function(t){return'<button class="tab'+(state.tab===t.id?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>';}).join("")+'</nav><main class="main" id="tab-content"></main></div>';}
 function calcBalance(u){var b=0;state.expenses.forEach(function(e){if(e.type!=="shared")return;if(e.paidBy===u)b+=(e.amount-e.myShare);else b-=e.myShare;});state.settlements.forEach(function(s){if(s.from===u)b+=s.amount;else if(s.to===u)b-=s.amount;});return b;}
 function loginAs(u){state.user=u;state.tab="add";render();if(!state.loading)renderTabContent();}
 function logout(){state.user=null;render();}
 function logoutFull(){googleSignOut();}
 function switchTab(t){state.tab=t;render();renderTabContent();}
-function renderTabContent(){var el=document.getElementById("tab-content");if(!el)return;var c="";if(state.tab==="add")c=renderAddTab();else if(state.tab==="budget")c=renderBudgetTab();else if(state.tab==="dashboard")c=renderDashboardTab();else if(state.tab==="split")c=renderSplitTab();else if(state.tab==="recurring")c=renderRecurringTab();else if(state.tab==="wealth")c=renderWealthTab();else if(state.tab==="settings")c=renderSettingsTab();el.innerHTML=c;}
+function renderTabContent(){var el=document.getElementById("tab-content");if(!el)return;var c="";if(state.tab==="add")c=renderAddTab();else if(state.tab==="budget")c=renderBudgetTab();else if(state.tab==="dashboard")c=renderDashboardTab();else if(state.tab==="split")c=renderSplitTab();else if(state.tab==="recurring")c=renderRecurringTab();else if(state.tab==="stock")c=renderStockTab();else if(state.tab==="wealth")c=renderWealthTab();else if(state.tab==="settings")c=renderSettingsTab();el.innerHTML=c;}
 
 // ══════════════════════════════════════════════════════════════
 // ADD TAB (unchanged from v7)
@@ -437,6 +439,15 @@ function renderDashboardTab(){
   var all=state.expenses.filter(function(e){return getMonthKey(new Date(e.date))===mk;});
   var myIncome=all.filter(function(e){return e.entryType==="income"&&e.addedBy===u;});
   var totalIncome=0;myIncome.forEach(function(e){totalIncome+=e.amount;});
+  // Add stock income (capital gain net + dividends + interest) and subtract cut loss for this month
+  var stockIncomeMk=0,stockCutLossMk=0;
+  (state.stockEntries[u]||[]).forEach(function(e){
+    if(e.month!==mk)return;
+    if(e.entryType==="cutloss"){stockCutLossMk+=e.amount||0;}
+    else if(e.entryType==="interest"){stockIncomeMk+=e.amount||0;}
+    else if(e.entryType==="capitalgain"||e.entryType==="dividend"){stockIncomeMk+=e.netAmount||0;}
+  });
+  totalIncome=totalIncome+stockIncomeMk-stockCutLossMk;
   var totalBudget=0;budget.forEach(function(b){totalBudget+=b.monthly;});
   var catSpend={};state.expenses.filter(function(e){return getMonthKey(new Date(e.date))===mk&&e.entryType!=="income";}).filter(function(e){if(e.type==="personal")return e.addedBy===u;return true;}).forEach(function(e){var a=e.type==="personal"?e.amount:e.myShare;catSpend[e.category]=(catSpend[e.category]||0)+a;});
   var groupTotals={fix:0,variable:0,asset:0,saving:0};Object.entries(catSpend).forEach(function(entry){var c=state.cats.find(function(x){return x.id===entry[0];});if(c&&groupTotals[c.group]!==undefined)groupTotals[c.group]+=entry[1];});
@@ -576,10 +587,223 @@ function delRecurring(id){
   saveDoc("recurrings",state.recurrings);renderTabContent();
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// STOCK TAB — Income (Interest/Capital Gain/Dividend) + Cut Loss
+// ══════════════════════════════════════════════════════════════
+var stockState={mode:"income",subtype:"interest"};
+
+function getStockNetIncome(user,mk){
+  var inc=0,loss=0;
+  (state.stockEntries[user]||[]).forEach(function(e){
+    if(e.month!==mk)return;
+    if(e.entryType==="cutloss")loss+=e.amount||0;
+    else if(e.entryType==="interest")inc+=e.amount||0;
+    else if(e.entryType==="capitalgain"||e.entryType==="dividend")inc+=e.netAmount||0;
+  });
+  return{income:inc,loss:loss,net:inc-loss};
+}
+
+function renderStockTab(){
+  var u=state.user,mk=state.month,entries=state.stockEntries[u]||[];
+  var net=getStockNetIncome(u,mk);
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 class="sec-title">ð Stock</h2>'+monthPicker()+'</div>';
+
+  h+='<div class="kpi kpi-3" style="margin-bottom:14px">';
+  h+='<div class="kpi-card"><div class="kpi-label">STOCK INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(net.income)+'</div></div>';
+  h+='<div class="kpi-card"><div class="kpi-label">CUT LOSS</div><div class="kpi-val" style="color:var(--red)">'+fes(net.loss)+'</div></div>';
+  h+='<div class="kpi-card"><div class="kpi-label">NET</div><div class="kpi-val" style="color:'+(net.net>=0?"var(--green)":"var(--red)")+'">'+fes(net.net)+'</div></div>';
+  h+='</div>';
+
+  h+='<div class="toggle-row"><button class="toggle-btn'+(stockState.mode==="income"?" active-green":"")+'" onclick="stockState.mode=\'income\';renderTabContent()">Income ðµ</button><button class="toggle-btn'+(stockState.mode==="cutloss"?" active-purple":"")+'" onclick="stockState.mode=\'cutloss\';renderTabContent()">Cut Loss ð</button></div>';
+
+  if(stockState.mode==="income"){
+    h+='<div class="toggle-row">';
+    h+='<button class="toggle-btn'+(stockState.subtype==="interest"?" active-teal":"")+'" onclick="stockState.subtype=\'interest\';renderTabContent()">Interest</button>';
+    h+='<button class="toggle-btn'+(stockState.subtype==="capitalgain"?" active":"")+'" onclick="stockState.subtype=\'capitalgain\';renderTabContent()">Capital Gain</button>';
+    h+='<button class="toggle-btn'+(stockState.subtype==="dividend"?" active-green":"")+'" onclick="stockState.subtype=\'dividend\';renderTabContent()">Dividend</button>';
+    h+='</div>';
+    h+='<div class="card" style="padding:14px;margin-bottom:14px;position:relative" id="stock-form">';
+    h+='<div class="field"><label>MONTH</label><input class="inp" type="month" id="stk-month" value="'+mk+'"></div>';
+    if(stockState.subtype==="interest"){
+      h+='<div class="field"><label>RECEIVED AMOUNT (€)</label><input class="inp inp-big" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
+      h+='<button class="submit-btn" style="background:var(--teal)" onclick="submitStockEntry()">Add Interest</button>';
+    } else {
+      var lbl=stockState.subtype==="capitalgain"?"Capital Gain (€)":"Dividend (€)";
+      h+='<div class="field"><label>STOCK NAME</label><input class="inp" id="stk-name" placeholder="e.g. AAPL, MSCI World"></div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      h+='<div class="field"><label>'+lbl+'</label><input class="inp" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
+      h+='<div class="field"><label>RETURN (%)</label><input class="inp" type="number" id="stk-ret" placeholder="0.0" step="0.1"></div>';
+      h+='<div class="field"><label>TAX FEE (€)</label><input class="inp" type="number" id="stk-tax" placeholder="0.00" step="0.01" min="0"></div>';
+      h+='<div class="field"><label>TRANSACTION COST (€)</label><input class="inp" type="number" id="stk-cost" placeholder="0.00" step="0.01" min="0"></div>';
+      h+='</div>';
+      h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:11px;color:var(--dim);margin-bottom:10px">Net = Gross − Tax fee − Transaction cost</div>';
+      h+='<button class="submit-btn" style="background:var(--green)" onclick="submitStockEntry()">Add '+(stockState.subtype==="capitalgain"?"Capital Gain":"Dividend")+'</button>';
+    }
+    h+='</div>';
+  } else {
+    h+='<div class="card" style="padding:14px;margin-bottom:14px;position:relative" id="stock-form">';
+    h+='<div class="field"><label>MONTH</label><input class="inp" type="month" id="stk-month" value="'+mk+'"></div>';
+    h+='<div class="field"><label>STOCK NAME</label><input class="inp" id="stk-name" placeholder="e.g. AAPL, MSCI World"></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="field"><label>LOSS AMOUNT (€)</label><input class="inp" type="number" id="stk-amt" placeholder="0.00" step="0.01" min="0"></div>';
+    h+='<div class="field"><label>TRANSACTION COST (€)</label><input class="inp" type="number" id="stk-cost" placeholder="0.00" step="0.01" min="0"></div>';
+    h+='<div class="field"><label>TAX FEE (€)</label><input class="inp" type="number" id="stk-tax" placeholder="0.00" step="0.01" min="0"></div>';
+    h+='<div class="field"><label>RETURN (%)</label><input class="inp" type="number" id="stk-ret" placeholder="0.0" step="0.1"></div>';
+    h+='</div>';
+    h+='<button class="submit-btn" style="background:var(--red)" onclick="submitStockEntry()">Record Cut Loss</button>';
+    h+='</div>';
+  }
+
+  h+=renderStockDashboard(u);
+
+  var monthEntries=entries.filter(function(e){return e.month===mk;}).sort(function(a,b){return(b.createdAt>a.createdAt)?1:-1;});
+  if(monthEntries.length>0){
+    h+='<h3 class="sec-h">This month\u2019s entries</h3><div class="card" style="padding:8px 14px">';
+    monthEntries.forEach(function(e){
+      var isLoss=e.entryType==="cutloss";
+      var icon=isLoss?"ð":(e.entryType==="interest"?"ð°":(e.entryType==="dividend"?"ð¸":"ð"));
+      var typeLabel=isLoss?"Cut Loss":(e.entryType==="interest"?"Interest":(e.entryType==="dividend"?"Dividend":"Capital Gain"));
+      var amt=isLoss?(e.amount):(e.netAmount||e.amount);
+      h+='<div class="tx-row"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="font-size:18px">'+icon+'</span><div style="min-width:0"><div class="tx-desc">'+typeLabel+(e.stockName?' · '+e.stockName:'')+'</div><div class="tx-meta">'+e.month+(e.returnPct?' · '+e.returnPct+'%':'')+'</div></div></div><div style="display:flex;align-items:center;gap:6px"><span class="tx-amt" style="color:'+(isLoss?"var(--red)":"var(--green)")+'">'+(isLoss?"-":"+")+fe(Math.abs(amt))+'</span><button class="del-btn" onclick="delStockEntry(\''+e.id+'\')">\u00d7</button></div></div>';
+    });
+    h+='</div>';
+  }
+  return h;
+}
+
+function renderStockDashboard(u){
+  var entries=state.stockEntries[u]||[];
+  if(!entries.length)return'<div class="empty" style="padding:20px">No stock entries yet. Add your first entry above.</div>';
+
+  var totInc=0,totLoss=0;
+  var byType={interest:0,capitalgain:0,dividend:0,cutloss:0};
+  entries.forEach(function(e){
+    if(e.entryType==="cutloss"){totLoss+=e.amount||0;byType.cutloss+=e.amount||0;}
+    else if(e.entryType==="interest"){totInc+=e.amount||0;byType.interest+=e.amount||0;}
+    else if(e.entryType==="capitalgain"){totInc+=e.netAmount||0;byType.capitalgain+=e.netAmount||0;}
+    else if(e.entryType==="dividend"){totInc+=e.netAmount||0;byType.dividend+=e.netAmount||0;}
+  });
+  var totNet=totInc-totLoss;
+
+  var h='<h3 class="sec-h">Stock performance</h3>';
+  h+='<div class="kpi kpi-2" style="margin-bottom:14px">';
+  h+='<div class="kpi-card"><div class="kpi-label">ALL-TIME INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(totInc)+'</div></div>';
+  h+='<div class="kpi-card"><div class="kpi-label">ALL-TIME LOSSES</div><div class="kpi-val" style="color:var(--red)">'+fes(totLoss)+'</div></div>';
+  h+='<div class="kpi-card" style="grid-column:1/-1"><div class="kpi-label">NET ALL-TIME</div><div class="kpi-val" style="color:'+(totNet>=0?"var(--green)":"var(--red)")+'">'+(totNet>=0?"+":"")+fe(totNet)+'</div></div>';
+  h+='</div>';
+
+  h+='<div class="card" style="padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">By type (all-time net)</div>';
+  var types=[{label:"Interest",val:byType.interest,color:"#0d9488",icon:"ð°"},{label:"Capital Gain",val:byType.capitalgain,color:"#1e3a5f",icon:"ð"},{label:"Dividend",val:byType.dividend,color:"#16a34a",icon:"ð¸"},{label:"Cut Loss",val:-byType.cutloss,color:"#dc2626",icon:"ð"}];
+  types.forEach(function(item){
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:14px">'+item.icon+'</span><span style="font-size:11px;color:var(--dim);min-width:90px">'+item.label+'</span><span style="font-family:var(--fm);font-size:12px;font-weight:600;color:'+(item.val>=0?"var(--green)":"var(--red)")+'">'+(item.val>=0?"+":"")+fe(item.val)+'</span></div>';
+  });
+  h+='</div>';
+
+  var byStock={};
+  entries.forEach(function(e){
+    if(!e.stockName)return;
+    if(!byStock[e.stockName])byStock[e.stockName]={name:e.stockName,net:0,count:0};
+    if(e.entryType==="cutloss")byStock[e.stockName].net-=e.amount||0;
+    else byStock[e.stockName].net+=e.netAmount||e.amount||0;
+    byStock[e.stockName].count++;
+  });
+  var stockList=Object.values(byStock).sort(function(a,b){return b.net-a.net;});
+  if(stockList.length>0){
+    h+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:14px"><div style="font-size:12px;font-weight:700;padding:12px 14px 8px">Per stock performance</div><table><thead><tr style="background:#f8f7f5"><th>Stock</th><th style="text-align:right">Net gain</th><th style="text-align:right">Entries</th></tr></thead><tbody>';
+    stockList.forEach(function(s){
+      h+='<tr style="border-bottom:1px solid #f0eeeb"><td style="font-weight:600">'+s.name+'</td><td style="text-align:right;font-family:var(--fm);color:'+(s.net>=0?"var(--green)":"var(--red)")+'">'+(s.net>=0?"+":"")+fe(s.net)+'</td><td style="text-align:right;color:var(--dim)">'+s.count+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  return h;
+}
+
+function submitStockEntry(){
+  var u=state.user;
+  var monthEl=document.getElementById("stk-month");
+  var amtEl=document.getElementById("stk-amt");
+  var nameEl=document.getElementById("stk-name");
+  var taxEl=document.getElementById("stk-tax");
+  var costEl=document.getElementById("stk-cost");
+  var retEl=document.getElementById("stk-ret");
+  var month=monthEl?monthEl.value:state.month;
+  var amt=amtEl?parseFloat(amtEl.value)||0:0;
+  if(!amt)return;
+  var entry={id:gid(),month:month,addedBy:u,createdAt:new Date().toISOString()};
+  if(stockState.mode==="cutloss"){
+    entry.entryType="cutloss";entry.amount=amt;
+    entry.stockName=nameEl?nameEl.value.trim():"";
+    entry.taxFee=taxEl?parseFloat(taxEl.value)||0:0;
+    entry.transactionCost=costEl?parseFloat(costEl.value)||0:0;
+    entry.returnPct=retEl?retEl.value.trim():"";
+  } else {
+    entry.entryType=stockState.subtype;entry.amount=amt;
+    if(stockState.subtype==="interest"){
+      entry.netAmount=amt;
+    } else {
+      var tax=taxEl?parseFloat(taxEl.value)||0:0;
+      var cost=costEl?parseFloat(costEl.value)||0:0;
+      entry.stockName=nameEl?nameEl.value.trim():"";
+      entry.taxFee=tax;entry.transactionCost=cost;
+      entry.netAmount=amt-tax-cost;
+      entry.returnPct=retEl?retEl.value.trim():"";
+    }
+  }
+  if(!state.stockEntries[u])state.stockEntries[u]=[];
+  state.stockEntries[u].push(entry);
+  saveDoc("stk-"+u,state.stockEntries[u]);
+  state.month=month;_cumCache={};
+  var form=document.getElementById("stock-form");
+  if(form){var t=document.createElement("div");t.className="toast";t.textContent="Saved! \u2713";form.prepend(t);setTimeout(function(){t.remove();},1800);}
+  renderTabContent();
+}
+function delStockEntry(id){
+  var u=state.user;
+  state.stockEntries[u]=(state.stockEntries[u]||[]).filter(function(x){return x.id!==id;});
+  saveDoc("stk-"+u,state.stockEntries[u]);_cumCache={};renderTabContent();
+}
+
+// ── Income growth line chart (last 9 months) ──
+function renderIncomeGrowthChart(u){
+  var months=[];
+  var now=new Date();
+  for(var i=8;i>=0;i--){
+    var d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    var mk=getMonthKey(d);
+    var salaryInc=0;
+    state.expenses.forEach(function(e){if(e.entryType==="income"&&e.addedBy===u&&getMonthKey(new Date(e.date))===mk)salaryInc+=e.amount;});
+    var sn=getStockNetIncome(u,mk);
+    months.push({label:MS[d.getMonth()]+"'"+String(d.getFullYear()).slice(2),mk:mk,salary:salaryInc,stockInc:sn.income,cutLoss:sn.loss,total:salaryInc+sn.income-sn.loss});
+  }
+  var hasData=months.some(function(m){return m.total>0||m.salary>0;});
+  if(!hasData)return'';
+  var W=500,H=160,padL=10,padR=30,padT=20,padB=22;
+  var innerW=W-padL-padR,innerH=H-padT-padB;
+  var n=months.length;
+  var maxVal=1;months.forEach(function(m){if(m.total>maxVal)maxVal=m.total;if(m.salary>maxVal)maxVal=m.salary;});
+  function xp(i){return padL+innerW*(i/(n-1));}
+  function yp(v){return padT+innerH*(1-v/maxVal);}
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;overflow:visible">';
+  for(var g=0;g<=2;g++){var gy=padT+innerH*(g/2);var gv=maxVal*(1-g/2);svg+='<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="#e8e5e0" stroke-width="1"/>';svg+='<text x="'+(W-padR+2)+'" y="'+(gy+3).toFixed(1)+'" font-size="8" fill="#bbb" text-anchor="start">'+Math.round(gv/1000)+'k</text>';}
+  var salPts=months.map(function(m,i){return xp(i).toFixed(1)+','+yp(m.salary).toFixed(1);}).join(' ');
+  svg+='<polyline points="'+salPts+'" fill="none" stroke="#c5d5e8" stroke-width="2" stroke-dasharray="4,3" stroke-linejoin="round"/>';
+  var totFillPts=months.map(function(m,i){return xp(i).toFixed(1)+','+yp(m.total).toFixed(1);}).join(' ');
+  var totAreaPts=xp(0).toFixed(1)+','+(padT+innerH)+' '+totFillPts+' '+xp(n-1).toFixed(1)+','+(padT+innerH);
+  svg+='<defs><linearGradient id="iggrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.25"/><stop offset="100%" stop-color="#1e3a5f" stop-opacity="0.02"/></linearGradient></defs>';
+  svg+='<polygon points="'+totAreaPts+'" fill="url(#iggrad)"/>';
+  svg+='<polyline points="'+totFillPts+'" fill="none" stroke="#1e3a5f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  months.forEach(function(m,i){svg+='<circle cx="'+xp(i).toFixed(1)+'" cy="'+yp(m.total).toFixed(1)+'" r="3" fill="#1e3a5f" stroke="white" stroke-width="1.5"/>';});
+  months.forEach(function(m,i){if(i%3===0||i===n-1)svg+='<text x="'+xp(i).toFixed(1)+'" y="'+(H-3)+'" font-size="9" fill="#999" text-anchor="middle">'+m.label+'</text>';});
+  svg+='</svg>';
+  var legend='<div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="display:inline-block;width:16px;height:2.5px;background:#1e3a5f;border-radius:1px"></span>Total income</div><div style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #c5d5e8"></span>Salary only</div></div>';
+  return'<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Income growth (9 months)</div>'+svg+legend+'</div>';
+}
+
 // ══════════════════════════════════════════════════════════════
 // WEALTH TAB — PIE CHART + per-account dev chart + dashboard
 // ══════════════════════════════════════════════════════════════
-var wealthFilter="all";
+var wealthFilter="all";var wealthYMin=0;
 
 function renderWealthTab(){
   var u=state.user,accounts=state.wAccounts[u]||DEFAULT_WACC,wealth=(state.wealth[u]||[]).slice().sort(function(a,b){return a.month<b.month?-1:1;}),targets=state.wTargets[u]||{yearEnd:50000,year:2026};
@@ -619,13 +843,17 @@ function renderWealthTab(){
       h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"><button class="filter-btn'+(wealthFilter==="all"?" active":"")+'" onclick="wealthFilter=\'all\';renderTabContent()">All combined</button>';
       accounts.forEach(function(a){h+='<button class="filter-btn'+(wealthFilter===a.id?" active":"")+'" onclick="wealthFilter=\''+a.id+'\';renderTabContent()">'+a.icon+' '+a.label+'</button>';});
       h+='</div>';
-      h+=svgAreaChart(chartData,accounts,wealthFilter);
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="font-size:10px;font-weight:600;color:var(--dim);letter-spacing:0.5px;white-space:nowrap">Y-AXIS START (€)</label><input class="inp" type="number" id="wealth-ymin" value="'+wealthYMin+'" min="0" step="1000" style="width:110px;padding:5px 8px;font-size:12px" onchange="wealthYMin=parseFloat(this.value)||0;renderTabContent()"><span style="font-size:10px;color:var(--dim)">e.g. 0 or 50000</span></div>';
+      h+=svgAreaChart(chartData,accounts,wealthFilter,wealthYMin);
 
       // Monthly changes
       h+='<div style="margin-top:12px;font-size:12px;font-weight:700;margin-bottom:6px">Monthly changes</div>';
       for(var i=chartData.length-1;i>=1&&i>=chartData.length-4;i--){var cur=wealthFilter==="all"?chartData[i].total:(chartData[i][wealthFilter]||0),prv=wealthFilter==="all"?chartData[i-1].total:(chartData[i-1][wealthFilter]||0),chg=cur-prv,cpct=prv>0?((chg/prv)*100):0;h+='<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px"><span style="color:var(--dim)">'+chartData[i].label+'</span><span style="font-family:var(--fm);color:'+(chg>=0?"var(--green)":"var(--red)")+'">'+(chg>=0?"+":"")+fes(chg)+' ('+(cpct>=0?"+":"")+cpct.toFixed(1)+'%)</span></div>';}
       h+='</div>';
     }
+
+    // ── Income growth LINE chart (quarterly, last 3 quarters) ──
+    h+=renderIncomeGrowthChart(u);
   }
 
   // Add snapshot
