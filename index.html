@@ -90,19 +90,13 @@ td{padding:7px 10px}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  PASTE YOUR FIREBASE CONFIG HERE                            ║
-// ╚══════════════════════════════════════════════════════════════╝
 var firebaseConfig={apiKey:"AIzaSyCgGct_H34Sp8cJr4XamCzOLvvvCWL6Sn0",authDomain:"duobudget-a480f.firebaseapp.com",projectId:"duobudget-a480f",storageBucket:"duobudget-a480f.firebasestorage.app",messagingSenderId:"686450058537",appId:"1:686450058537:web:dca95ea7f52a7442228338"};
-firebase.initializeApp(firebaseConfig);var db=firebase.firestore();var auth=firebase.auth();
+firebase.initializeApp(firebaseConfig);var db=firebase.firestore();
 var LISTENERS={};
-
 function docRef(k){return db.collection("duobudget").doc(k);}
 function loadDoc(k,fb){return docRef(k).get().then(function(s){return s.exists?s.data().value:fb;}).catch(function(){return fb;});}
 function saveDoc(k,v){return docRef(k).set({value:v,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}
 function listenDoc(k,cb){if(LISTENERS[k])LISTENERS[k]();LISTENERS[k]=docRef(k).onSnapshot(function(s){if(s.exists)cb(s.data().value);});}
-
-// State now includes freebies
 var state={user:null,expenses:[],settlements:[],recurrings:[],cats:[],budgets:{},wealth:{},wAccounts:{},wTargets:{},freebies:[],tab:"add",month:getMonthKey(new Date()),loading:true};
 var USERS=["Ivana","Adi"],MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var GROUPS=[{id:"fix",label:"Fixed Costs"},{id:"variable",label:"Variable"},{id:"asset",label:"Assets"},{id:"saving",label:"Savings"}];
@@ -117,10 +111,8 @@ function fe(n){return(typeof n==="number"?n:0).toLocaleString("de-DE",{style:"cu
 function fes(n){return(typeof n==="number"?n:0).toLocaleString("de-DE",{maximumFractionDigits:0})+" \u20AC";}
 function getMonthKey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 function prevMonth(mk){var p=mk.split("-"),y=+p[0],m=+p[1];m--;if(m<1){m=12;y--;}return y+"-"+String(m).padStart(2,"0");}
-// Get Jan..currentMonth keys for current year (Story 1)
 function getYearMonthKeys(){var now=new Date(),y=now.getFullYear(),cm=now.getMonth()+1,keys=[];for(var m=1;m<=cm;m++)keys.push(y+"-"+String(m).padStart(2,"0"));return keys;}
 
-// Cumulative budget
 var _cumCache={};
 function getCumBudget(user,mk,catId){
   var key=user+"|"+mk+"|"+catId;if(_cumCache[key]!==undefined)return _cumCache[key];
@@ -129,19 +121,16 @@ function getCumBudget(user,mk,catId){
   var earliestMk=null;state.expenses.forEach(function(e){if(e.entryType==="income")return;var emk=getMonthKey(new Date(e.date));if(!earliestMk||emk<earliestMk)earliestMk=emk;});
   if(!earliestMk||mk<=earliestMk){_cumCache[key]=monthly;return monthly;}
   var pm=prevMonth(mk);var prevBudget=getCumBudget(user,pm,catId);var prevUsage=getMonthCatSpend(user,pm,catId);
-  // Story 8: subtract paid-out freebies from usage (they add back to budget)
   var paidOutInMonth=0;state.freebies.forEach(function(f){if(f.addedBy===user&&f.status==="Paid out"&&f.paidMonth===pm)paidOutInMonth+=f.amount;});
   var result=monthly+(prevBudget-(prevUsage-paidOutInMonth));
   _cumCache[key]=result;return result;
 }
 function getMonthCatSpend(user,mk,catId){var t=0;state.expenses.forEach(function(e){if(getMonthKey(new Date(e.date))!==mk||e.entryType==="income"||e.category!==catId)return;if(e.type==="personal"&&e.addedBy!==user)return;t+=e.type==="personal"?e.amount:e.myShare;});return t;}
 function getMonthTotalSpend(user,mk){var t=0;state.expenses.forEach(function(e){if(getMonthKey(new Date(e.date))!==mk||e.entryType==="income")return;if(e.type==="personal"&&e.addedBy!==user)return;t+=e.type==="personal"?e.amount:e.myShare;});return t;}
-// Story 2: only variable+saving spend
 function getMonthVarSavSpend(user,mk){var t=0;state.expenses.forEach(function(e){if(getMonthKey(new Date(e.date))!==mk||e.entryType==="income")return;if(e.type==="personal"&&e.addedBy!==user)return;var c=state.cats.find(function(x){return x.id===e.category;});if(!c||!(c.group==="variable"||c.group==="saving"))return;t+=e.type==="personal"?e.amount:e.myShare;});return t;}
 
 function svgPie(slices,size){var r=size/2,cx=r,cy=r,total=0;slices.forEach(function(s){total+=s.value;});if(total===0)return'<div style="text-align:center;color:var(--dim);font-size:12px">No data</div>';var svg='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">';var sa=-Math.PI/2;slices.forEach(function(s){if(s.value<=0)return;var sl=(s.value/total)*2*Math.PI,ea=sa+sl,la=sl>Math.PI?1:0,x1=cx+r*Math.cos(sa),y1=cy+r*Math.sin(sa),x2=cx+r*Math.cos(ea),y2=cy+r*Math.sin(ea);if(slices.filter(function(x){return x.value>0;}).length===1)svg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+s.color+'"/>';else svg+='<path d="M'+cx+','+cy+' L'+x1.toFixed(2)+','+y1.toFixed(2)+' A'+r+','+r+' 0 '+la+',1 '+x2.toFixed(2)+','+y2.toFixed(2)+' Z" fill="'+s.color+'"/>';sa=ea;});svg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r*0.55)+'" fill="var(--surface)"/>';svg+='<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-size="12" font-weight="700" font-family="var(--fm)" fill="var(--text)">'+fes(total)+'</text>';svg+='<text x="'+cx+'" y="'+(cy+10)+'" text-anchor="middle" font-size="9" fill="var(--dim)">Total</text></svg>';return svg;}
 
-// Init — now loads freebies too
 async function initApp(){
   try{var r=await Promise.all([loadDoc("expenses",[]),loadDoc("settlements",[]),loadDoc("recurrings",[]),loadDoc("cats",DEFAULT_CATS),loadDoc("bud-Ivana",DEFAULT_BUDGET),loadDoc("bud-Adi",DEFAULT_BUDGET),loadDoc("wlth-Ivana",[]),loadDoc("wlth-Adi",[]),loadDoc("wacc-Ivana",DEFAULT_WACC),loadDoc("wacc-Adi",DEFAULT_WACC),loadDoc("wtgt-Ivana",{yearEnd:50000,year:2026}),loadDoc("wtgt-Adi",{yearEnd:50000,year:2026}),loadDoc("freebies",[])]);
   state.expenses=r[0]||[];state.settlements=r[1]||[];state.recurrings=r[2]||[];state.cats=r[3]||DEFAULT_CATS;state.budgets={Ivana:r[4]||DEFAULT_BUDGET,Adi:r[5]||DEFAULT_BUDGET};state.wealth={Ivana:r[6]||[],Adi:r[7]||[]};state.wAccounts={Ivana:r[8]||DEFAULT_WACC,Adi:r[9]||DEFAULT_WACC};state.wTargets={Ivana:r[10]||{yearEnd:50000,year:2026},Adi:r[11]||{yearEnd:50000,year:2026}};state.freebies=r[12]||[];state.loading=false;
@@ -151,7 +140,6 @@ async function initApp(){
 
 function render(){var app=document.getElementById("app");if(state.loading){app.innerHTML='<div class="loading-screen">Loading...</div>';return;}if(!state.user){app.innerHTML=renderLogin();return;}app.innerHTML=renderShell();}
 function renderLogin(){return'<div class="login-wrap"><div class="login-card"><div style="font-size:40px;margin-bottom:8px">\u{1F4B6}</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">DuoBudget</h1><p style="font-size:13px;color:#8a8a8a;margin-bottom:24px">Budget \u00B7 Split \u00B7 Dashboard \u00B7 Wealth</p><div style="display:flex;gap:12px">'+USERS.map(function(u){return'<button class="login-btn" onclick="loginAs(\''+u+'\')"><span class="av">'+u.charAt(0)+'</span><span>'+u+'</span></button>';}).join("")+'</div></div></div>';}
-// Story 3: removed Budget tab; Story 4,5: added Freebies tab
 function renderShell(){var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);var bt=balance===0?"Settled up with "+other+" \u2713":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));var tabs=[{id:"add",label:"+ Add"},{id:"dashboard",label:"Dashboard"},{id:"split",label:"Split"},{id:"freebies",label:"Freebies"},{id:"wealth",label:"Wealth"},{id:"settings",label:"\u2699"}];return'<div class="shell"><header class="hdr"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">\u{1F4B6}</span><span style="font-weight:800;font-size:16px">DuoBudget</span></div><button class="badge" onclick="logout()"><span class="av av-sm">'+u.charAt(0)+'</span><span>'+u+'</span></button></header><div class="bal">'+bt+'</div><nav class="tabs">'+tabs.map(function(t){return'<button class="tab'+(state.tab===t.id?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>';}).join("")+'</nav><main class="main" id="tab-content"></main></div>';}
 function calcBalance(u){var b=0;state.expenses.forEach(function(e){if(e.type!=="shared")return;if(e.paidBy===u)b+=(e.amount-e.myShare);else b-=e.myShare;});state.settlements.forEach(function(s){if(s.from===u)b+=s.amount;else if(s.to===u)b-=s.amount;});return b;}
 function loginAs(u){state.user=u;state.tab="add";render();renderTabContent();}
@@ -159,9 +147,6 @@ function logout(){state.user=null;render();}
 function switchTab(t){state.tab=t;render();renderTabContent();}
 function renderTabContent(){var el=document.getElementById("tab-content");if(!el)return;var c="";if(state.tab==="add")c=renderAddTab();else if(state.tab==="dashboard")c=renderDashboardTab();else if(state.tab==="split")c=renderSplitTab();else if(state.tab==="freebies")c=renderFreebiesTab();else if(state.tab==="wealth")c=renderWealthTab();else if(state.tab==="settings")c=renderSettingsTab();el.innerHTML=c;}
 
-// ══════════════════════════════════════════════════════════════
-// ADD TAB — now includes budget content below + freebie entry (Stories 3,4)
-// ══════════════════════════════════════════════════════════════
 var addState={mode:"expense",type:"personal",cat:"groceries",split:"equal",paidBy:"",rInt:"monthly",amt:"",desc:"",date:new Date().toISOString().slice(0,10),rend:"",custom:""};
 function saveAddInputs(){var a=document.getElementById("add-amt");if(a)addState.amt=a.value;var d=document.getElementById("add-desc");if(d)addState.desc=d.value;var dt=document.getElementById("add-date");if(dt)addState.date=dt.value;var re=document.getElementById("add-rend");if(re)addState.rend=re.value;var cu=document.getElementById("add-custom");if(cu)addState.custom=cu.value;}
 function rerenderAdd(){saveAddInputs();renderTabContent();}
@@ -171,17 +156,13 @@ function renderAddTab(){
   var freq={};state.expenses.forEach(function(e){if(e.addedBy===u&&e.entryType!=="income")freq[e.category]=(freq[e.category]||0)+1;});
   var top5=Object.entries(freq).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(x){return x[0];});
   var h='<div style="position:relative" id="add-form">';
-  // Mode: expense, recurring, income, freebie (Story 4)
   h+='<div class="toggle-row"><button class="toggle-btn'+(addState.mode==="expense"?" active":"")+'" onclick="saveAddInputs();addState.mode=\'expense\';rerenderAdd()">Expense</button><button class="toggle-btn'+(addState.mode==="recurring"?" active-teal":"")+'" onclick="saveAddInputs();addState.mode=\'recurring\';rerenderAdd()">Recurring</button><button class="toggle-btn'+(addState.mode==="income"?" active-green":"")+'" onclick="saveAddInputs();addState.mode=\'income\';rerenderAdd()">Income</button><button class="toggle-btn'+(addState.mode==="freebie"?" active-orange":"")+'" onclick="saveAddInputs();addState.mode=\'freebie\';rerenderAdd()">Freebie</button></div>';
-
   if(addState.mode==="freebie"){
-    // Freebie entry form (Story 4)
     h+='<div class="field"><label>FREEBIE NAME</label><input class="inp" id="add-desc" placeholder="e.g. Product XYZ gratis testen" value="'+(addState.desc||"").replace(/"/g,"&quot;")+'"></div>';
     h+='<div class="field"><label>EURO AMOUNT</label><input class="inp inp-big" type="number" id="add-amt" placeholder="0.00" step="0.01" min="0" value="'+(addState.amt||'')+'"></div>';
     h+='<div class="field"><label>STATUS</label><select class="inp" id="freebie-status"><option value="Registered">Registered</option><option value="Approved">Approved</option><option value="Paid out">Paid out</option><option value="Declined">Declined</option></select></div>';
     h+='<button class="submit-btn" style="background:#f59e0b" onclick="submitFreebie()">Add Freebie</button>';
   } else {
-    // Normal expense/income/recurring
     if(addState.mode!=="income")h+='<div class="toggle-row"><button class="toggle-btn'+(addState.type==="personal"?" active":"")+'" onclick="saveAddInputs();addState.type=\'personal\';rerenderAdd()">Personal</button><button class="toggle-btn'+(addState.type==="shared"?" active-purple":"")+'" onclick="saveAddInputs();addState.type=\'shared\';rerenderAdd()">Shared</button></div>';
     h+='<div class="field"><label>AMOUNT (EUR)</label><input class="inp inp-big" type="number" id="add-amt" placeholder="0.00" step="0.01" min="0" value="'+(addState.amt||'')+'"></div>';
     h+='<div class="field"><label>'+(addState.mode==="income"?"SOURCE (OPTIONAL)":"DESCRIPTION (OPTIONAL)")+'</label><input class="inp" id="add-desc" placeholder="'+(addState.mode==="income"?"e.g. Salary":"Auto-fills from category")+'" value="'+(addState.desc||"").replace(/"/g,"&quot;")+'"></div>';
@@ -195,9 +176,7 @@ function renderAddTab(){
     var btnC=addState.mode==="income"?"var(--green)":addState.mode==="recurring"?"var(--teal)":"var(--accent)";
     h+='<button class="submit-btn" style="background:'+btnC+'" onclick="submitExpense()">'+(addState.mode==="income"?"Add Income":addState.mode==="recurring"?"Set Recurring":"Add Expense")+'</button>';
   }
-  h+='</div>'; // end add-form
-
-  // Story 3: Budget transactions below the add form
+  h+='</div>';
   h+='<div class="divider"></div>';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 class="sec-title" style="font-size:15px">Transactions</h3>'+monthPicker()+'</div>';
   var mE=state.expenses.filter(function(e){return getMonthKey(new Date(e.date))===state.month&&e.entryType!=="income";}).filter(function(e){if(e.type==="personal")return e.addedBy===u;return true;}).sort(function(a,b){return new Date(b.date)-new Date(a.date);});
@@ -222,20 +201,15 @@ function submitFreebie(){
   var f={id:gid(),desc:desc,amount:amt,status:status,addedBy:state.user,date:new Date().toISOString().slice(0,10)};
   if(status==="Paid out")f.paidMonth=getMonthKey(new Date());
   state.freebies.push(f);saveDoc("freebies",state.freebies);_cumCache={};
-  addState.amt="";addState.desc="";
-  document.getElementById("add-amt").value="";document.getElementById("add-desc").value="";
+  addState.amt="";addState.desc="";document.getElementById("add-amt").value="";document.getElementById("add-desc").value="";
   var form=document.getElementById("add-form"),t=document.createElement("div");t.className="toast";t.textContent="Freebie added! \u2713";form.prepend(t);setTimeout(function(){t.remove();},1800);
 }
 function delExpense(id){state.expenses=state.expenses.filter(function(e){return e.id!==id;});saveDoc("expenses",state.expenses);_cumCache={};renderTabContent();}
 
-// ══════════════════════════════════════════════════════════════
-// DASHBOARD — Story 1: Jan-to-current charts; Story 2: var+saving only for 2 charts
-// ══════════════════════════════════════════════════════════════
 function renderDashboardTab(){
   var u=state.user,budget=state.budgets[u]||DEFAULT_BUDGET;
   var p=state.month.split("-"),y=+p[0],m=+p[1],mk=state.month,pmk=prevMonth(mk);
   var curSpent=getMonthTotalSpend(u,mk),prevSpentVal=getMonthTotalSpend(u,pmk);
-  // Story 2: variable+saving only for comparison
   var curVS=getMonthVarSavSpend(u,mk),prevVS=getMonthVarSavSpend(u,pmk);
   var all=state.expenses.filter(function(e){return getMonthKey(new Date(e.date))===mk;});
   var myIncome=all.filter(function(e){return e.entryType==="income"&&e.addedBy===u;});
@@ -244,36 +218,23 @@ function renderDashboardTab(){
   var catSpend={};state.expenses.filter(function(e){return getMonthKey(new Date(e.date))===mk&&e.entryType!=="income";}).filter(function(e){if(e.type==="personal")return e.addedBy===u;return true;}).forEach(function(e){var a=e.type==="personal"?e.amount:e.myShare;catSpend[e.category]=(catSpend[e.category]||0)+a;});
   var groupTotals={fix:0,variable:0,asset:0,saving:0};Object.entries(catSpend).forEach(function(entry){var c=state.cats.find(function(x){return x.id===entry[0];});if(c&&groupTotals[c.group]!==undefined)groupTotals[c.group]+=entry[1];});
   var remaining=totalIncome-curSpent;
-  // All months for avg (variable+saving only for Story 2)
   var allVS={};state.expenses.forEach(function(e){if(e.entryType==="income")return;var c=state.cats.find(function(x){return x.id===e.category;});if(!c||!(c.group==="variable"||c.group==="saving"))return;var emk=getMonthKey(new Date(e.date));if(!allVS[emk])allVS[emk]=0;if(e.type==="personal"&&e.addedBy===u)allVS[emk]+=e.amount;else if(e.type==="shared")allVS[emk]+=e.myShare;});
   var vsKeys=Object.keys(allVS).sort(),l12vs=vsKeys.slice(-12),avg12vs=0;if(l12vs.length>0){l12vs.forEach(function(k){avg12vs+=allVS[k];});avg12vs/=l12vs.length;}
   var dLM=prevVS>0?((curVS-prevVS)/prevVS*100):0,dAv=avg12vs>0?((curVS-avg12vs)/avg12vs*100):0;
-
   var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 class="sec-title">Dashboard</h2>'+monthPicker()+'</div>';
-  // KPIs (unchanged — use total)
   h+='<div class="kpi kpi-3"><div class="kpi-card"><div class="kpi-label">INCOME</div><div class="kpi-val" style="color:var(--green)">'+fes(totalIncome)+'</div></div><div class="kpi-card"><div class="kpi-label">SPENT</div><div class="kpi-val">'+fes(curSpent)+'</div><div class="kpi-sub">of '+fes(totalBudget)+'</div></div><div class="kpi-card"><div class="kpi-label">REMAINING</div><div class="kpi-val" style="color:'+(remaining>=0?"var(--green)":"var(--red)")+'">'+fes(remaining)+'</div></div></div>';
-
-  // Story 2: Spending comparison — variable+saving only
   var maxC=Math.max(curVS,prevVS,avg12vs,1);
   h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">Spending comparison</div><div style="font-size:10px;color:var(--dim);margin-bottom:8px">Variable + Savings only</div>';
   [{label:"This month",val:curVS,color:"var(--accent)"},{label:"Last month",val:prevVS,color:"#8b5cf6"},{label:"12-month avg",val:avg12vs,color:"#f59e0b"}].forEach(function(item){var pct=maxC>0?(item.val/maxC*100):0;h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:11px;color:var(--dim);min-width:80px">'+item.label+'</span><div style="flex:1;height:16px;background:#f0eeeb;border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:'+item.color+';width:'+pct+'%"></div></div><span style="font-size:11px;font-family:var(--fm);min-width:65px;text-align:right">'+fes(item.val)+'</span></div>';});
   h+='<div style="display:flex;gap:12px;margin-top:8px"><div style="font-size:11px;color:'+(dLM>0?"var(--red)":"var(--green)")+'">vs last mo: '+(dLM>0?"+":"")+dLM.toFixed(1)+'%</div><div style="font-size:11px;color:'+(dAv>0?"var(--red)":"var(--green)")+'">vs avg: '+(dAv>0?"+":"")+dAv.toFixed(1)+'%</div></div></div>';
-
-  // Story 1+2: Expense trend Jan-to-current (variable+saving only)
   var ymKeys=getYearMonthKeys();
   var tD=ymKeys.map(function(ck){return{label:MS[+ck.split("-")[1]-1],spent:allVS[ck]||0};});
   var maxT=1;tD.forEach(function(d){if(d.spent>maxT)maxT=d.spent;});
   h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">Expense trend '+y+'</div><div style="font-size:10px;color:var(--dim);margin-bottom:8px">Variable + Savings only</div><div class="chart-bar">';
   tD.forEach(function(d){var pct=Math.max(d.spent/maxT*100,2);h+='<div class="chart-bar-item" style="height:'+pct+'%;background:'+(d.label===MS[m-1]?"var(--accent)":"#c5d5e8")+'"><div class="chart-bar-val">'+fes(d.spent)+'</div></div>';});
   h+='</div><div style="display:flex;gap:3px">';tD.forEach(function(d){h+='<div style="flex:1;text-align:center;font-size:9px;color:var(--dim)">'+d.label+'</div>';});h+='</div></div>';
-
-  // Income allocation (unchanged)
   if(totalIncome>0){var allocs=[{label:"Fixed Costs",val:groupTotals.fix,color:"#8b5cf6"},{label:"Variable",val:groupTotals.variable,color:"#f59e0b"},{label:"Investment",val:groupTotals.asset,color:"#16a34a"},{label:"Savings",val:groupTotals.saving,color:"#06b6d4"}];h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Income allocation</div><div class="alloc-bar">';allocs.forEach(function(a){var pct=(a.val/totalIncome)*100;if(pct>0)h+='<div style="width:'+pct+'%;background:'+a.color+';min-width:2px"></div>';});if(remaining>0)h+='<div style="width:'+(remaining/totalIncome*100)+'%;background:#e8e5e0"></div>';h+='</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">';allocs.forEach(function(a){var pct=totalIncome>0?(a.val/totalIncome*100):0;h+='<div class="alloc-row"><span class="alloc-dot" style="background:'+a.color+'"></span><span style="color:#666;flex:1">'+a.label+'</span><span style="font-family:var(--fm);font-weight:600">'+pct.toFixed(1)+'%</span><span style="font-family:var(--fm);color:#999;font-size:10px">'+fes(a.val)+'</span></div>';});h+='<div class="alloc-row" style="grid-column:1/-1;border-top:1px solid #f0eeeb;padding-top:4px;margin-top:2px"><span class="alloc-dot" style="background:#e8e5e0"></span><span style="color:#666;flex:1">Remaining</span><span style="font-family:var(--fm);font-weight:600;color:'+(remaining>=0?"var(--green)":"var(--red)")+'">'+(totalIncome>0?(remaining/totalIncome*100).toFixed(1):0)+'%</span><span style="font-family:var(--fm);color:#999;font-size:10px">'+fes(remaining)+'</span></div></div></div>';}
-
-  // Budget usage bar (unchanged)
   h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--dim)">Budget usage</span><span style="font-weight:600;font-family:var(--fm)">'+(totalBudget>0?(curSpent/totalBudget*100).toFixed(0)+"%":"--")+'</span></div><div class="progress-bar"><div class="progress-fill" style="background:'+(curSpent>totalBudget?"var(--red)":"var(--accent)")+';width:'+Math.min(totalBudget>0?curSpent/totalBudget*100:0,100)+'%"></div></div></div>';
-
-  // Budget vs Actual cumulative (unchanged)
   var catBudget={};budget.forEach(function(b){catBudget[b.cat]=b.monthly;});
   var tRows=[];GROUPS.forEach(function(g){state.cats.filter(function(c){return c.group===g.id;}).forEach(function(c){var bBase=catBudget[c.id]||0,sA=catSpend[c.id]||0;if(bBase===0&&sA===0)return;var bCum=getCumBudget(u,mk,c.id);var isRed=(sA>bCum&&bCum>0)||(bBase===0&&sA>0);tRows.push({cat:c,budget:bCum,budgetBase:bBase,spent:sA,pct:bCum>0?(sA/bCum*100):(sA>0?100:0),diff:bCum-sA,isRed:isRed});});});
   var totalCum=0;tRows.forEach(function(r){totalCum+=r.budget;});
@@ -283,9 +244,6 @@ function renderDashboardTab(){
   return h;
 }
 
-// ══════════════════════════════════════════════════════════════
-// SPLIT TAB (unchanged)
-// ══════════════════════════════════════════════════════════════
 function renderSplitTab(){
   var u=state.user,other=USERS.find(function(x){return x!==u;}),balance=calcBalance(u);
   var bt=balance===0?"All settled up!":balance>0?other+" owes you "+fe(Math.abs(balance)):"You owe "+other+" "+fe(Math.abs(balance));
@@ -300,61 +258,33 @@ function renderSplitTab(){
 function showSettleForm(){document.getElementById("settle-form").innerHTML='<div class="card" style="padding:14px;margin-bottom:16px"><div style="font-size:13px;font-weight:700;margin-bottom:10px">Record payment</div><div class="field"><label>AMOUNT</label><input class="inp" type="number" id="settle-amt" placeholder="0.00" step="0.01"></div><div class="field"><label>DATE</label><input class="inp" type="date" id="settle-date" value="'+new Date().toISOString().slice(0,10)+'"></div><div style="display:flex;gap:8px"><button class="submit-btn" style="flex:1;background:var(--green)" onclick="doSettle()">Confirm</button><button class="submit-btn" style="flex:1;background:#94a3b8" onclick="document.getElementById(\'settle-form\').innerHTML=\'\'">Cancel</button></div></div>';}
 function doSettle(){var amt=parseFloat(document.getElementById("settle-amt").value);if(isNaN(amt)||amt<=0)return;state.settlements.push({id:gid(),from:state.user,to:USERS.find(function(x){return x!==state.user;}),amount:amt,date:document.getElementById("settle-date").value});saveDoc("settlements",state.settlements);renderTabContent();}
 
-// ══════════════════════════════════════════════════════════════
-// FREEBIES TAB (Stories 5,6,7,8)
-// ══════════════════════════════════════════════════════════════
 function renderFreebiesTab(){
-  var u=state.user;
-  var myFreebies=state.freebies.filter(function(f){return f.addedBy===u;});
-  // Story 7: Dashboard summary
+  var u=state.user;var myFreebies=state.freebies.filter(function(f){return f.addedBy===u;});
   var totals={};FREEBIE_STATUSES.forEach(function(s){totals[s]=0;});
   myFreebies.forEach(function(f){totals[f.status]=(totals[f.status]||0)+f.amount;});
   var statusColors={Registered:"#1d4ed8",Approved:"#92400e","Paid out":"#065f46",Declined:"#991b1b"};
-  var statusBg={Registered:"#dbeafe",Approved:"#fef3c7","Paid out":"#d1fae5",Declined:"#fee2e2"};
-
-  var h='<h2 class="sec-title">Freebies</h2>';
-  // KPI summary
-  h+='<div class="kpi kpi-4" style="margin-top:12px">';
+  var h='<h2 class="sec-title">Freebies</h2><div class="kpi kpi-4" style="margin-top:12px">';
   FREEBIE_STATUSES.forEach(function(s){h+='<div class="kpi-card"><div class="kpi-label" style="color:'+statusColors[s]+'">'+s.toUpperCase()+'</div><div class="kpi-val" style="font-size:14px">'+fes(totals[s])+'</div></div>';});
   h+='</div>';
-
-  // List
   if(!myFreebies.length)h+='<div class="empty">No freebies yet. Add one from the Add tab.</div>';
   else myFreebies.sort(function(a,b){return new Date(b.date)-new Date(a.date);}).forEach(function(f){
     var sc=f.status==="Registered"?"status-registered":f.status==="Approved"?"status-approved":f.status==="Paid out"?"status-paid":"status-declined";
     h+='<div class="tx-row"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="font-size:16px">\u{1F381}</span><div style="min-width:0"><div class="tx-desc">'+f.desc+'</div><div class="tx-meta">'+f.date+' \u00B7 <span class="status-badge '+sc+'">'+f.status+'</span></div></div></div><div style="display:flex;align-items:center;gap:6px"><span class="tx-amt">'+fe(f.amount)+'</span>';
-    // Status change dropdown
     h+='<select style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface)" onchange="changeFreebieStatus(\''+f.id+'\',this.value)">';
     FREEBIE_STATUSES.forEach(function(s){h+='<option value="'+s+'"'+(f.status===s?' selected':'')+'>'+s+'</option>';});
-    h+='</select>';
-    h+='<button class="del-btn" onclick="delFreebie(\''+f.id+'\')">\u00D7</button></div></div>';
+    h+='</select><button class="del-btn" onclick="delFreebie(\''+f.id+'\')">\u00D7</button></div></div>';
   });
   return h;
 }
-// Story 6: change status; Story 8: paid-out budget adjustment
-function changeFreebieStatus(id,newStatus){
-  var f=state.freebies.find(function(x){return x.id===id;});if(!f)return;
-  var wasPaid=f.status==="Paid out";
-  f.status=newStatus;
-  if(newStatus==="Paid out")f.paidMonth=getMonthKey(new Date());
-  else delete f.paidMonth;
-  saveDoc("freebies",state.freebies);_cumCache={};renderTabContent();
-}
-function delFreebie(id){
-  state.freebies=state.freebies.filter(function(f){return f.id!==id;});
-  saveDoc("freebies",state.freebies);_cumCache={};renderTabContent();
-}
+function changeFreebieStatus(id,newStatus){var f=state.freebies.find(function(x){return x.id===id;});if(!f)return;f.status=newStatus;if(newStatus==="Paid out")f.paidMonth=getMonthKey(new Date());else delete f.paidMonth;saveDoc("freebies",state.freebies);_cumCache={};renderTabContent();}
+function delFreebie(id){state.freebies=state.freebies.filter(function(f){return f.id!==id;});saveDoc("freebies",state.freebies);_cumCache={};renderTabContent();}
 
-// ══════════════════════════════════════════════════════════════
-// WEALTH TAB — pie chart, per-account chart, full names in table (Story 1: Jan-current)
-// ══════════════════════════════════════════════════════════════
 var wealthFilter="all";
 function renderWealthTab(){
   var u=state.user,accounts=state.wAccounts[u]||DEFAULT_WACC,wealth=(state.wealth[u]||[]).slice().sort(function(a,b){return a.month<b.month?-1:1;}),targets=state.wTargets[u]||{yearEnd:50000,year:2026};
   var latestTotal=0,startTotal=0;
   if(wealth.length>0){var last=wealth[wealth.length-1],first=wealth[0];accounts.forEach(function(a){latestTotal+=(last.values&&last.values[a.id])||0;startTotal+=(first.values&&first.values[a.id])||0;});}
-  var monthlyTarget=(targets.yearEnd-startTotal)/12;
-  var progressPct=targets.yearEnd>0?(latestTotal/targets.yearEnd*100):0;
+  var monthlyTarget=(targets.yearEnd-startTotal)/12;var progressPct=targets.yearEnd>0?(latestTotal/targets.yearEnd*100):0;
   var chartData=wealth.map(function(w){var total=0,row={raw:w};accounts.forEach(function(a){var v=(w.values&&w.values[a.id])||0;row[a.id]=v;total+=v;});row.total=total;var fm=+wealth[0].month.split("-")[1],fy=+wealth[0].month.split("-")[0],tm=+w.month.split("-")[1],ty=+w.month.split("-")[0];row.target=startTotal+monthlyTarget*((ty-fy)*12+(tm-fm)+1);row.diff=total-row.target;row.label=MS[tm-1]+" '"+String(ty).slice(2);return row;});
   var latest=chartData.length>0?chartData[chartData.length-1]:null,prev=chartData.length>1?chartData[chartData.length-2]:null;
   var growthAmt=latest&&prev?(latest.total-prev.total):0,growthPct=prev&&prev.total>0?((latest.total-prev.total)/prev.total*100):0;
@@ -362,29 +292,23 @@ function renderWealthTab(){
   if(latest){
     h+='<div class="kpi kpi-2" style="margin-top:12px"><div class="kpi-card"><div class="kpi-label">TOTAL WEALTH</div><div class="kpi-val">'+fes(latestTotal)+'</div><div class="kpi-sub">Goal: '+fes(targets.yearEnd)+'</div></div><div class="kpi-card"><div class="kpi-label">MONTHLY TARGET</div><div class="kpi-val" style="color:#f59e0b">'+fes(monthlyTarget)+'</div><div class="kpi-sub">'+fes(targets.yearEnd)+' by Dec</div></div><div class="kpi-card"><div class="kpi-label">VS TARGET</div><div class="kpi-val" style="color:'+(latest.diff>=0?"var(--green)":"var(--red)")+'">'+(latest.diff>=0?"+":"")+fes(latest.diff)+'</div></div><div class="kpi-card"><div class="kpi-label">LAST GROWTH</div><div class="kpi-val" style="color:'+(growthAmt>=0?"var(--green)":"var(--red)")+'">'+(growthAmt>=0?"+":"")+fes(growthAmt)+'</div><div class="kpi-sub">'+(growthPct>=0?"+":"")+growthPct.toFixed(1)+'%</div></div></div>';
     h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--dim)">Year-end progress</span><span style="font-weight:600;font-family:var(--fm)">'+progressPct.toFixed(0)+'%</span></div><div style="height:14px;background:#f0eeeb;border-radius:7px;overflow:hidden"><div style="height:100%;border-radius:7px;background:linear-gradient(90deg,#1e3a5f,#3b82f6);width:'+Math.min(progressPct,100)+'%"></div></div><div style="display:flex;justify-content:space-between;font-size:10px;color:#999;margin-top:4px"><span>'+fes(latestTotal)+'</span><span>'+fes(targets.yearEnd)+'</span></div></div>';
-    // Pie chart
     var pieSlices=[];accounts.forEach(function(a,idx){var v=latest[a.id]||0;if(v>0)pieSlices.push({value:v,color:ACCOLORS[idx%ACCOLORS.length],label:a.label,icon:a.icon});});
     h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">Wealth distribution</div><div class="pie-wrap">'+svgPie(pieSlices,160)+'<div class="pie-legend">';
     pieSlices.forEach(function(s){var pct=latestTotal>0?(s.value/latestTotal*100):0;h+='<div class="alloc-row"><span class="alloc-dot" style="background:'+s.color+'"></span><span style="color:#666;flex:1;min-width:80px">'+s.icon+' '+s.label+'</span><span style="font-family:var(--fm);font-weight:600;min-width:36px;text-align:right">'+pct.toFixed(0)+'%</span><span style="font-family:var(--fm);color:#999;font-size:10px;min-width:55px;text-align:right">'+fes(s.value)+'</span></div>';});
     h+='</div></div></div>';
-    // Wealth growth chart with filter
     if(chartData.length>1){
       h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Wealth growth</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"><button class="filter-btn'+(wealthFilter==="all"?" active":"")+'" onclick="wealthFilter=\'all\';renderTabContent()">All combined</button>';
       accounts.forEach(function(a){h+='<button class="filter-btn'+(wealthFilter===a.id?" active":"")+'" onclick="wealthFilter=\''+a.id+'\';renderTabContent()">'+a.icon+' '+a.label+'</button>';});h+='</div>';
       var maxVal=1;chartData.forEach(function(d){var v=wealthFilter==="all"?d.total:(d[wealthFilter]||0);if(v>maxVal)maxVal=v;});
       h+='<div class="chart-bar" style="height:120px">';chartData.forEach(function(d){var val=wealthFilter==="all"?d.total:(d[wealthFilter]||0),pct=Math.max(val/maxVal*100,2);h+='<div class="chart-bar-item" style="height:'+pct+'%;background:var(--accent)"><div class="chart-bar-val">'+fes(val)+'</div></div>';});
       h+='</div><div style="display:flex;gap:3px">';chartData.forEach(function(d){h+='<div style="flex:1;text-align:center;font-size:9px;color:var(--dim)">'+d.label+'</div>';});h+='</div>';
-      // Monthly changes
       h+='<div style="margin-top:12px;font-size:12px;font-weight:700;margin-bottom:6px">Monthly changes</div>';
       for(var i=chartData.length-1;i>=1&&i>=chartData.length-4;i--){var cur=wealthFilter==="all"?chartData[i].total:(chartData[i][wealthFilter]||0),prv=wealthFilter==="all"?chartData[i-1].total:(chartData[i-1][wealthFilter]||0),chg=cur-prv,cpct=prv>0?((chg/prv)*100):0;h+='<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px"><span style="color:var(--dim)">'+chartData[i].label+'</span><span style="font-family:var(--fm);color:'+(chg>=0?"var(--green)":"var(--red)")+'">'+(chg>=0?"+":"")+fes(chg)+' ('+(cpct>=0?"+":"")+cpct.toFixed(1)+'%)</span></div>';}
       h+='</div>';
     }
-    // Per-account mini charts
     if(chartData.length>1&&accounts.length>1){h+='<div class="card" style="margin-bottom:14px;padding:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">Account development</div>';accounts.forEach(function(a,idx){var aMax=1;chartData.forEach(function(d){var v=d[a.id]||0;if(v>aMax)aMax=v;});h+='<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:600;margin-bottom:4px;color:'+ACCOLORS[idx%ACCOLORS.length]+'">'+a.icon+' '+a.label+'</div><div style="display:flex;align-items:flex-end;gap:2px;height:40px">';chartData.forEach(function(d){var v=d[a.id]||0,pct=Math.max(v/aMax*100,3);h+='<div style="flex:1;height:'+pct+'%;background:'+ACCOLORS[idx%ACCOLORS.length]+';border-radius:2px 2px 0 0;opacity:0.8" title="'+d.label+': '+fes(v)+'"></div>';});h+='</div><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:2px"><span>'+chartData[0].label+'</span><span>'+fes(chartData[chartData.length-1][a.id]||0)+'</span><span>'+chartData[chartData.length-1].label+'</span></div></div>';});h+='</div>';}
   }
-  // Add snapshot
   h+='<div style="margin-bottom:14px"><button class="submit-btn" style="background:var(--green)" onclick="showWealthForm()">+ Add snapshot</button></div><div id="wealth-form"></div>';
-  // Detail table with FULL account names
   if(chartData.length>0){h+='<div class="card" style="padding:0;overflow:hidden"><div style="font-size:12px;font-weight:700;padding:12px 14px 8px">Monthly detail</div><div style="overflow-x:auto"><table><thead><tr style="background:#f8f7f5"><th>Month</th>';accounts.forEach(function(a){h+='<th style="text-align:right;font-size:10px;max-width:80px;white-space:normal">'+a.label+'</th>';});h+='<th style="text-align:right">Total</th><th style="text-align:right">Target</th><th style="text-align:right">Delta</th><th style="width:24px"></th></tr></thead><tbody>';chartData.forEach(function(r){h+='<tr style="border-bottom:1px solid #f0eeeb"><td>'+r.label+'</td>';accounts.forEach(function(a){h+='<td style="text-align:right;font-family:var(--fm)">'+fes(r[a.id]||0)+'</td>';});h+='<td style="text-align:right;font-family:var(--fm);font-weight:600">'+fes(r.total)+'</td><td style="text-align:right;font-family:var(--fm)">'+fes(r.target)+'</td><td style="text-align:right;font-family:var(--fm);color:'+(r.diff>=0?"var(--green)":"var(--red)")+';font-weight:600">'+(r.diff>=0?"+":"")+fes(r.diff)+'</td><td><button class="del-btn" style="width:20px;height:20px;font-size:11px" onclick="delWealth(\''+r.raw.month+'\')">\u00D7</button></td></tr>';});h+='</tbody></table></div></div>';}
   return h;
 }
@@ -392,9 +316,6 @@ function showWealthForm(){var el=document.getElementById("wealth-form"),accounts
 function saveWealth(){var month=document.getElementById("w-month").value;if(!month)return;var accounts=state.wAccounts[state.user]||DEFAULT_WACC,entry={month:month,values:{}};accounts.forEach(function(a){var el=document.getElementById("w-"+a.id);entry.values[a.id]=el?parseFloat(el.value)||0:0;});var w=state.wealth[state.user]||[],ex=w.findIndex(function(x){return x.month===month;});if(ex>=0)w[ex]=entry;else w.push(entry);state.wealth[state.user]=w;saveDoc("wlth-"+state.user,w);renderTabContent();}
 function delWealth(mo){state.wealth[state.user]=(state.wealth[state.user]||[]).filter(function(x){return x.month!==mo;});saveDoc("wlth-"+state.user,state.wealth[state.user]);renderTabContent();}
 
-// ══════════════════════════════════════════════════════════════
-// SETTINGS TAB (unchanged from v8)
-// ══════════════════════════════════════════════════════════════
 function renderSettingsTab(){
   var u=state.user,budget=state.budgets[u]||DEFAULT_BUDGET,totalBud=0;budget.forEach(function(b){totalBud+=b.monthly;});
   var wTargets=state.wTargets[u]||{yearEnd:50000,year:2026},wAccounts=state.wAccounts[u]||DEFAULT_WACC;
